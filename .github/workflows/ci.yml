@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: burnrate
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: burnrate_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check . && ruff format --check .
+
+      - name: Type check
+        run: mypy src/
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://burnrate:test@localhost:5432/burnrate_test
+          FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
+          SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
+        run: alembic upgrade head
+
+      - name: Tests
+        env:
+          DATABASE_URL: postgresql+psycopg://burnrate:test@localhost:5432/burnrate_test
+          FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
+          SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
+        run: pytest --cov=burnrate --cov-report=term-missing
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy web app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --app burnrate-web --config fly.toml --remote-only
+
+      - name: Deploy worker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --app burnrate-worker --config fly.worker.toml --remote-only

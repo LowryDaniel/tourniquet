@@ -1,0 +1,16 @@
+app = "burnrate-worker"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[env]
+  APP_ENV = "production"
+  LOG_LEVEL = "INFO"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# No HTTP service — this is a background worker
+# Scheduled tasks: midnight cap reset, email queue, anomaly evaluator (W4)
