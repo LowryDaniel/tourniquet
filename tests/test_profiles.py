@@ -2,7 +2,7 @@
 
 import pytest
 
-from burnrate.billing.profiles import PROFILES, get_profile
+from tourniquet.billing.profiles import PROFILES, get_profile
 
 
 def test_three_profiles_exist():

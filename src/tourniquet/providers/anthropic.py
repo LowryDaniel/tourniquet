@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from burnrate.config import settings
+from tourniquet.config import settings
 
 
 @dataclass
@@ -48,7 +48,7 @@ class UsageAccumulator:
 
 CAP_HIT_EVENT = (
     'event: message_stop\n'
-    'data: {"type":"message_stop","stop_reason":"burnrate_cap_hit"}\n\n'
+    'data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}\n\n'
 )
 
 

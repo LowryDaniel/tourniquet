@@ -1,4 +1,4 @@
-# BurnRate — Project Plan
+# Tourniquet — Project Plan
 
 **Date:** 2026-05-05
 **Status:** Locked — ready to build
@@ -8,7 +8,7 @@
 
 ## North star
 
-After the 1.67-billion-token Claude Code incident and the £47K LangChain loop, every developer running unattended Claude agents is one bad weekend away from a bill they can't pay. BurnRate is a free, drop-in proxy that catches that before it happens. Build small, ship fast, charge later.
+After the 1.67-billion-token Claude Code incident and the £47K LangChain loop, every developer running unattended Claude agents is one bad weekend away from a bill they can't pay. Tourniquet is a free, drop-in proxy that catches that before it happens. Build small, ship fast, charge later.
 
 ---
 
@@ -20,13 +20,13 @@ The real audience, in priority order:
 
 1. **Solo developers running Claude Code unattended** — concrete pain (1.67B-token incident), 30-second install
 2. **Indie founders / small teams where the founder commits code** — will pay £19/mo for "I sleep better"
-3. **Platforms (Lovable / Flowise) bundling BurnRate** — B2B, not until 500+ users prove demand
+3. **Platforms (Lovable / Flowise) bundling Tourniquet** — B2B, not until 500+ users prove demand
 
 Not in MVP audience: enterprises, OpenAI-only users, non-developers running hosted no-code platforms (they need the platform to integrate us — that's a B2B sale we don't pursue in v1).
 
 ## What we're actually selling
 
-Be honest about the value: BurnRate is a thin layer over Anthropic's native API. The non-trivial parts are:
+Be honest about the value: Tourniquet is a thin layer over Anthropic's native API. The non-trivial parts are:
 
 - **Mid-stream kill** (synthetic `message_stop`) — Anthropic has no equivalent
 - **Atomic cap accounting under concurrency** — `INSERT … ON CONFLICT DO UPDATE` on `caps_today`, no race conditions
@@ -40,8 +40,8 @@ Everything else (token counting, alert thresholds, profiles) is convenience arou
 
 | Decision | Answer |
 |---|---|
-| Product name | **BurnRate** |
-| Domain | `burnrate.ai` (preferred) / `burnrate.dev` (fallback) |
+| Product name | **Tourniquet** |
+| Domain | `tourniquet.ai` (preferred) / `tourniquet.dev` (fallback) |
 | Anomaly detection timing | **Week 4** — cold-start noise → false positives if enabled in W1 |
 | LLM support scope | **Anthropic-only in v1**; OpenAI in v2 only if users ask (~6h with provider interface in place) |
 | Multi-API keys | Multiple Anthropic API keys per user account (not multiple LLM providers) |
@@ -95,7 +95,7 @@ That is the entire MVP. Cut everything else.
 | Email | Resend free tier (3K/mo) | Free, deliverability good |
 | Errors | Sentry free tier | Free, mature |
 | Hosting | Fly.io | One web app + one worker app, ~£8–10/mo combined |
-| Domain | `burnrate.ai` | Dan to register |
+| Domain | `tourniquet.ai` | Dan to register |
 
 ---
 
@@ -106,17 +106,17 @@ That is the entire MVP. Cut everything else.
 - **API version pinning**: default `anthropic-version: 2023-06-01`. If user's request has a different version header, pass it through.
 - **Token counting**: read `message_start.usage` (input tokens) + accumulate `message_delta.usage` (output tokens) from streamed events. No `tiktoken`, no separate counting library.
 - **Cost calculation**: per-model £ rates table in `pricing.py`. Update when Anthropic publishes price changes. Models supported in v1: Claude Sonnet 4.5, 4.6, 4.7, Claude Opus 4.5–4.7, Claude Haiku 4.5.
-- **Streaming kill mechanic**: when cumulative cost crosses cap mid-stream, send a synthetic `message_stop` event to the client with `stop_reason: "burnrate_cap_hit"`, then close the connection. Client gets a clean termination, not a half-token corruption.
-- **Drop-in for Claude Code**: user sets `ANTHROPIC_BASE_URL=https://burnrate.ai` + `ANTHROPIC_API_KEY=br_xxxxxxxxxxxx` (their BurnRate token, not their Anthropic key). BurnRate resolves the BurnRate token to the user's stored Anthropic key.
+- **Streaming kill mechanic**: when cumulative cost crosses cap mid-stream, send a synthetic `message_stop` event to the client with `stop_reason: "tourniquet_cap_hit"`, then close the connection. Client gets a clean termination, not a half-token corruption.
+- **Drop-in for Claude Code**: user sets `ANTHROPIC_BASE_URL=https://tourniquet.ai` + `ANTHROPIC_API_KEY=tq_xxxxxxxxxxxx` (their Tourniquet token, not their Anthropic key). Tourniquet resolves the Tourniquet token to the user's stored Anthropic key.
 
 ---
 
 ## Multiple API keys per user — clarified
 
-Each BurnRate user can register N Anthropic API keys. Each registered key gets:
+Each Tourniquet user can register N Anthropic API keys. Each registered key gets:
 
 - Friendly name (e.g. "prod", "dev", "claude-code-experiments")
-- A BurnRate token (`br_*`) to use in client code instead of the raw Anthropic key
+- A Tourniquet token (`tq_*`) to use in client code instead of the raw Anthropic key
 - Its own daily £ cap
 - Its own profile (Hobby / Production / Demo / Custom-coming-in-v2)
 - Optional alert recipient email (defaults to account email)
@@ -130,7 +130,7 @@ Use cases: separate "prod" cap from "personal experimentation" cap; revoke a lea
 
 ```sql
 users (id, email, magic_link_token, created_at, stripe_customer_id NULL)
-api_keys (id, user_id, name, br_token_hash, anthropic_key_encrypted, profile, daily_cap_pence, kill_enabled, alert_email, created_at)
+api_keys (id, user_id, name, tq_token_hash, anthropic_key_encrypted, profile, daily_cap_pence, kill_enabled, alert_email, created_at)
 usage_events (id, api_key_id, request_id, model, input_tokens, output_tokens, cost_pence, cap_hit, created_at)
 triggers (id, api_key_id, condition_json, actions_json, enabled, last_fired_at)  -- scaffolded, anomaly turns on W4
 caps_today (api_key_id PK, date, total_pence)  -- denormalised for fast cap-check on hot path
@@ -145,9 +145,9 @@ caps_today (api_key_id PK, date, total_pence)  -- denormalised for fast cap-chec
 | Week | Hours | Deliverable | Kill criterion |
 |---|---|---|---|
 | **1 — MVP build** | ~14h | Anthropic proxy + magic-link signup + multi-key dashboard + 3 profiles + email alerts + cap kill, deployed on Fly.io | Streaming kill doesn't actually stop Anthropic billing → architecture rethink |
-| **2 — Self-test + soft launch** | ~7h | 7 days of Dan's own Claude Code traffic through BurnRate; landing page; Show HN; Anthropic Discord post; /r/ClaudeAI post; X thread anchored on the 1.67B-token incident | <30 free signups in week 1 of public exposure → reframe positioning before pushing harder |
+| **2 — Self-test + soft launch** | ~7h | 7 days of Dan's own Claude Code traffic through Tourniquet; landing page; Show HN; Anthropic Discord post; /r/ClaudeAI post; X thread anchored on the 1.67B-token incident | <30 free signups in week 1 of public exposure → reframe positioning before pushing harder |
 | **3 — KeyHunt minimal** | ~6h | Cron-based Docker Hub Registry v2 + MCP config scanner, TruffleHog subprocess, findings table; Dan triages and submits 5 best findings to HackerOne manually | <2 accepted submissions → format wrong, fix before scaling |
-| **4 — Anomaly + iterate** | ~7h | Anomaly detection rule turned on (3× rolling-7d-baseline trigger); iterate on user feedback; tutorial blog posts (BurnRate + Claude Code, BurnRate + Lovable, BurnRate + n8n) | <100 active users by end of week 4 → reframe positioning |
+| **4 — Anomaly + iterate** | ~7h | Anomaly detection rule turned on (3× rolling-7d-baseline trigger); iterate on user feedback; tutorial blog posts (Tourniquet + Claude Code, Tourniquet + Lovable, Tourniquet + n8n) | <100 active users by end of week 4 → reframe positioning |
 
 **Total active dev time: ~34 hours over 4 weeks.** Realistic calendar: one focused weekend + light evening work.
 
@@ -160,7 +160,7 @@ caps_today (api_key_id PK, date, total_pence)  -- denormalised for fast cap-chec
 | Fly.io web app (proxy + dashboard) | ~£5 | shared-cpu-1x, 256MB |
 | Fly.io worker app (midnight reset cron + alerts) | ~£2 | shared-cpu-1x |
 | Fly Postgres | £0 | Free tier 3GB shared between both apps |
-| Domain `burnrate.ai` | ~£1 | ~£10/year amortised |
+| Domain `tourniquet.ai` | ~£1 | ~£10/year amortised |
 | Resend (transactional email) | £0 | Free tier 3K/mo |
 | Sentry | £0 | Free tier 5K events/mo |
 | Better Stack uptime | £0 | Free tier 10 monitors |
@@ -172,11 +172,11 @@ caps_today (api_key_id PK, date, total_pence)  -- denormalised for fast cap-chec
 
 ### Phase A — alpha (week 2): 5 hand-picked users
 - Dan + 4 contacts who actively run Claude Code or Anthropic agents in production
-- Each runs BurnRate for 7 days
+- Each runs Tourniquet for 7 days
 - Goal: confirm zero false positives, zero missed kills, no perceptible latency
 
 ### Phase B — soft launch (weeks 3–4): aim for 100 signups
-1. **Show HN.** Headline: *"BurnRate — a kill switch for Claude, after the 1.67B-token incident."* Tuesday-Thursday morning UK time. Single sharp narrative. Free, no signup-wall.
+1. **Show HN.** Headline: *"Tourniquet — a kill switch for Claude, after the 1.67B-token incident."* Tuesday-Thursday morning UK time. Single sharp narrative. Free, no signup-wall.
 2. **Anthropic developer Discord** — find #showcase or equivalent, one post with screenshot of "saved £127 today" from Dan's own usage.
 3. **/r/ClaudeAI + /r/LocalLLaMA + /r/LangChain** — anchored on the incident, not a launch announcement.
 4. **X/Twitter thread** — 5 tweets: incident hook → screenshots → free tool link in last tweet. No "launching" tweet first.
@@ -184,8 +184,8 @@ caps_today (api_key_id PK, date, total_pence)  -- denormalised for fast cap-chec
 Cut from the original plan: Lovable Discord. Their audience builds apps without writing code; they can't install a proxy. Pursue them only if/when bundling becomes the path (Phase D, 500+ users).
 
 ### Phase C — organic flywheel (weeks 5+)
-- **Tutorials** (one each): *"Use BurnRate with Claude Code in 30 seconds"*, *"...with Lovable"*, *"...with n8n"*. SEO + community-shareable. Submit to dev.to and Hashnode.
-- **User screenshots** — every "BurnRate saved me £X" message becomes a testimonial post.
+- **Tutorials** (one each): *"Use Tourniquet with Claude Code in 30 seconds"*, *"...with Lovable"*, *"...with n8n"*. SEO + community-shareable. Submit to dev.to and Hashnode.
+- **User screenshots** — every "Tourniquet saved me £X" message becomes a testimonial post.
 - **Awesome lists** — submit to Awesome-LLM, Awesome-Claude, Awesome-AI-Tools.
 
 ### Phase D — partnership (week 8+, only if 500+ users)
@@ -246,17 +246,17 @@ No UI. No automation of submission. No customer support. Just a cron and a findi
 
 ## GitHub repository
 
-Private repo: https://github.com/LowryDaniel/burnrate
+Private repo: https://github.com/LowryDaniel/tourniquet
 
-Project directory: `/Users/danlowry/Desktop/AI/burnrate/`
+Project directory: `/Users/danlowry/Desktop/AI/tourniquet/`
 
 ---
 
 ## Immediate next 5 actions (this week)
 
-1. **(Dan, 5 min)** Domain check — register `burnrate.ai` (and `burnrate.dev` fallback) on Namecheap or Cloudflare.
-2. **(Dan, 5 min)** UKIPO + USPTO TESS quick trademark search on "BurnRate" in software class.
-3. **(Sonnet, 30 min)** Build the SQLAlchemy models (`src/burnrate/models.py`), run `alembic revision --autogenerate`, apply initial migration.
+1. **(Dan, 5 min)** Domain check — register `tourniquet.ai` (and `tourniquet.dev` fallback) on Namecheap or Cloudflare.
+2. **(Dan, 5 min)** UKIPO + USPTO TESS quick trademark search on "Tourniquet" in software class.
+3. **(Sonnet, 30 min)** Build the SQLAlchemy models (`src/tourniquet/models.py`), run `alembic revision --autogenerate`, apply initial migration.
 4. **(Sonnet, 1h)** Build the Anthropic forwarding proxy: non-streaming `/v1/messages` → `api.anthropic.com/v1/messages`. Smoke test with `curl`.
 5. **(Sonnet, 2h)** Add SSE streaming pass-through + cumulative token counting from `message_start.usage` and `message_delta.usage`. Write 3 integration tests (under cap, over cap mid-stream, multi-key isolation).
 

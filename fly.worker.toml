@@ -1,4 +1,4 @@
-app = "burnrate-worker"
+app = "tourniquet-worker"
 primary_region = "lhr"
 
 [build]

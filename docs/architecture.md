@@ -4,14 +4,14 @@
 
 ```
 Client (Claude Code / SDK)
-       │ ANTHROPIC_BASE_URL=https://burnrate.ai
-       │ ANTHROPIC_API_KEY=br_xxxxxxxxxxxx
+       │ ANTHROPIC_BASE_URL=https://tourniquet.ai
+       │ ANTHROPIC_API_KEY=tq_xxxxxxxxxxxx
        ▼
 ┌─────────────────────────────┐
-│         BurnRate            │
+│         Tourniquet            │
 │  FastAPI + httpx + Jinja2   │
 │                             │
-│  ① Auth: verify br_* token  │
+│  ① Auth: verify tq_* token  │
 │  ② Cap check: caps_today    │
 │  ③ Proxy: stream to Anth.   │
 │  ④ Count: tokens in flight  │
@@ -23,14 +23,14 @@ Client (Claude Code / SDK)
       api.anthropic.com
 ```
 
-BurnRate is a **transparent pass-through proxy**. It never normalises Anthropic's SSE event format — events go straight to the client. The only mutations are:
+Tourniquet is a **transparent pass-through proxy**. It never normalises Anthropic's SSE event format — events go straight to the client. The only mutations are:
 1. Replacing the `x-api-key` header with the user's stored Anthropic key
-2. Injecting a synthetic `message_stop` event (with `stop_reason: "burnrate_cap_hit"`) when the cap is crossed mid-stream
+2. Injecting a synthetic `message_stop` event (with `stop_reason: "tourniquet_cap_hit"`) when the cap is crossed mid-stream
 
 ## Provider directory pattern
 
 ```
-src/burnrate/providers/
+src/tourniquet/providers/
     anthropic.py   ← v1 only
     openai.py      ← slot in for v2 (~6h) — different endpoint, SSE format, auth header
     gemini.py      ← slot in for v3
@@ -42,11 +42,11 @@ Each provider implements a thin interface (`stream_request`, `count_tokens`, `co
 
 When cumulative spend crosses the daily cap mid-stream:
 
-1. BurnRate stops forwarding bytes from the Anthropic connection
-2. Sends a synthetic `data: {"type":"message_stop","stop_reason":"burnrate_cap_hit"}\n\n` SSE event
+1. Tourniquet stops forwarding bytes from the Anthropic connection
+2. Sends a synthetic `data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}\n\n` SSE event
 3. Closes the client connection cleanly
 4. Records `cap_hit=true` on the usage event
-5. All subsequent requests return `402 Payment Required` with body `{"error": "burnrate_cap_hit", "resets_at": "<midnight-UTC-iso>"}`
+5. All subsequent requests return `402 Payment Required` with body `{"error": "tourniquet_cap_hit", "resets_at": "<midnight-UTC-iso>"}`
 
 The client sees a clean termination, not a half-token corruption. Claude Code handles `message_stop` gracefully.
 
@@ -59,7 +59,7 @@ No tiktoken. No separate counting call. Read from the stream:
 
 Final cost = `(input_tokens × input_rate_pence) + (output_tokens × output_rate_pence)`
 
-Rates live in `src/burnrate/billing/pricing.py` — update when Anthropic publishes price changes.
+Rates live in `src/tourniquet/billing/pricing.py` — update when Anthropic publishes price changes.
 
 ## Database schema
 
@@ -78,7 +78,7 @@ api_keys (
     id                      UUID PK DEFAULT gen_random_uuid(),
     user_id                 UUID REFERENCES users(id) ON DELETE CASCADE,
     name                    TEXT NOT NULL,              -- "prod", "dev", etc.
-    br_token_hash           TEXT NOT NULL,              -- bcrypt hash of br_* token
+    tq_token_hash           TEXT NOT NULL,              -- bcrypt hash of tq_* token
     anthropic_key_encrypted TEXT NOT NULL,              -- Fernet(sk-ant-...)
     profile                 TEXT NOT NULL DEFAULT 'hobby', -- hobby|production|demo
     daily_cap_pence         INTEGER NOT NULL DEFAULT 500,  -- 500 = £5
@@ -128,7 +128,7 @@ caps_today (
 
 ## Profiles (v1)
 
-Pre-built profiles stored as named constants in `src/burnrate/billing/profiles.py`. Profiles set:
+Pre-built profiles stored as named constants in `src/tourniquet/billing/profiles.py`. Profiles set:
 - `alert_thresholds`: list of percentages where email alert fires (e.g. [80])
 - `kill_at_pct`: percentage of cap where kill triggers (e.g. 100, 200, or None)
 - `kill_silently`: if False, send pause-and-ask instead of hard kill
@@ -142,8 +142,8 @@ Pre-built profiles stored as named constants in `src/burnrate/billing/profiles.p
 ## Request flow (sequence)
 
 ```
-1. Client sends POST /v1/messages with Authorization: Bearer br_xxxxxxxxxxxx
-2. Auth middleware: hash token → lookup api_keys.br_token_hash
+1. Client sends POST /v1/messages with Authorization: Bearer tq_xxxxxxxxxxxx
+2. Auth middleware: hash token → lookup api_keys.tq_token_hash
 3. Load api_key row (includes profile, daily_cap_pence, kill_enabled)
 4. Check caps_today for today's total_pence; if >= cap and kill_enabled → 402 immediately
 5. Decrypt anthropic_key_encrypted with FERNET_KEY → sk-ant-...
@@ -158,7 +158,7 @@ Pre-built profiles stored as named constants in `src/burnrate/billing/profiles.p
 
 | App | Role |
 |---|---|
-| `burnrate-web` | FastAPI: proxy + dashboard + magic-link auth |
-| `burnrate-worker` | Celery/APScheduler: midnight cap reset cron, alert email queue, (W4) anomaly evaluator |
+| `tourniquet-web` | FastAPI: proxy + dashboard + magic-link auth |
+| `tourniquet-worker` | Celery/APScheduler: midnight cap reset cron, alert email queue, (W4) anomaly evaluator |
 
 Both apps share the same Fly Postgres cluster.

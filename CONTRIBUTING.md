@@ -1,6 +1,6 @@
 # Contributing
 
-BurnRate is pre-launch and not yet accepting external contributors. This file documents the internal development workflow.
+Tourniquet is pre-launch and not yet accepting external contributors. This file documents the internal development workflow.
 
 ## Setup
 
@@ -12,7 +12,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env  # fill in values
 alembic upgrade head
-uvicorn burnrate.main:app --reload
+uvicorn tourniquet.main:app --reload
 ```
 
 ## Code standards

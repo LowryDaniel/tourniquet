@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
-        sa.Column("br_token_hash", sa.Text, nullable=False),
+        sa.Column("tq_token_hash", sa.Text, nullable=False),
         sa.Column("anthropic_key_encrypted", sa.Text, nullable=False),
         sa.Column("profile", sa.String(50), nullable=False, server_default="hobby"),
         sa.Column("daily_cap_pence", sa.Integer, nullable=False, server_default="500"),
@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
     op.create_index("ix_api_keys_user_id", "api_keys", ["user_id"])
-    op.create_index("ix_api_keys_br_token_hash", "api_keys", ["br_token_hash"])
+    op.create_index("ix_api_keys_tq_token_hash", "api_keys", ["tq_token_hash"])
 
     op.create_table(
         "usage_events",

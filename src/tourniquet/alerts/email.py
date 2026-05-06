@@ -11,7 +11,7 @@ from datetime import date
 
 import resend
 
-from burnrate.config import settings
+from tourniquet.config import settings
 
 
 def _already_alerted_today(api_key_id: uuid.UUID, threshold_pct: int, today: date) -> bool:
@@ -45,7 +45,7 @@ async def maybe_send_alert(
     resend.Emails.send({
         "from": settings.resend_from_email,
         "to": [recipient_email],
-        "subject": f"BurnRate alert: {api_key_name} at {pct_used}% of daily cap",
+        "subject": f"Tourniquet alert: {api_key_name} at {pct_used}% of daily cap",
         "html": (
             f"<p>Your API key <strong>{api_key_name}</strong> has used "
             f"<strong>£{spent_pounds:.2f}</strong> of your £{cap_pounds:.2f} daily cap "

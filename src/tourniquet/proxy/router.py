@@ -1,7 +1,7 @@
 """Proxy router — the hot path.
 
 POST /v1/messages:
-  1. Verify br_* token → load api_key row
+  1. Verify tq_* token → load api_key row
   2. Pre-flight cap check → 402 if already over cap
   3. Decrypt Anthropic key
   4. Stream request through providers/anthropic.py
@@ -21,12 +21,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from burnrate.billing.caps import add_spend, get_today_spend, is_over_cap
-from burnrate.billing.pricing import cost_pence
-from burnrate.config import settings
-from burnrate.db import get_session
-from burnrate.models import ApiKey, UsageEvent
-from burnrate.providers.anthropic import UsageAccumulator, stream_request
+from tourniquet.billing.caps import add_spend, get_today_spend, is_over_cap
+from tourniquet.billing.pricing import cost_pence
+from tourniquet.config import settings
+from tourniquet.db import get_session
+from tourniquet.models import ApiKey, UsageEvent
+from tourniquet.providers.anthropic import UsageAccumulator, stream_request
 
 router = APIRouter()
 
@@ -39,7 +39,7 @@ def _decrypt_anthropic_key(encrypted: str) -> str:
 
 
 async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
-    """Resolve a br_* bearer token to its ApiKey row.
+    """Resolve a tq_* bearer token to its ApiKey row.
 
     Uses bcrypt verify — intentionally slow to prevent brute-force.
     """
@@ -53,10 +53,10 @@ async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
     keys = result.scalars().all()
 
     for key in keys:
-        if bcrypt.checkpw(raw.encode(), key.br_token_hash.encode()):
+        if bcrypt.checkpw(raw.encode(), key.tq_token_hash.encode()):
             return key
 
-    raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Invalid or unknown BurnRate token."})
+    raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Invalid or unknown Tourniquet token."})
 
 
 @router.post("/v1/messages", response_model=None)
@@ -82,7 +82,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 status_code=402,
                 content={
                     "error": {
-                        "type": "burnrate_cap_hit",
+                        "type": "tourniquet_cap_hit",
                         "message": "Daily spend cap reached. Resets at midnight UTC.",
                         "resets_at": resets_at.isoformat(),
                         "cap_pence": api_key.daily_cap_pence,
@@ -117,7 +117,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 on_cap_check=_cap_check,
             ):
                 accumulated = acc
-                if b"burnrate_cap_hit" in chunk:
+                if b"tourniquet_cap_hit" in chunk:
                     cap_was_hit = True
                 yield chunk
 

@@ -1,23 +1,23 @@
-# BurnRate
+# Tourniquet
 
 **Stop the next £47K token burn before it costs you the rent.**
 
-BurnRate is a free, drop-in Anthropic API proxy that enforces a hard daily £ spend cap per API key. When the cap is hit, in-flight streams are killed cleanly and subsequent requests return `402` until midnight UTC.
+Tourniquet is a free, drop-in Anthropic API proxy that enforces a hard daily £ spend cap per API key. When the cap is hit, in-flight streams are killed cleanly and subsequent requests return `402` until midnight UTC.
 
 ## Why
 
 - The 1.67-billion-token Claude Code incident. The £47K LangChain loop. Every developer running unattended agents is one bad weekend away from a bill they can't pay.
 - Anthropic has no native per-key spending caps.
-- BurnRate is a transparent proxy — zero code changes beyond two environment variables.
+- Tourniquet is a transparent proxy — zero code changes beyond two environment variables.
 
 ## Drop-in for Claude Code
 
 ```bash
-export ANTHROPIC_BASE_URL=https://burnrate.ai
-export ANTHROPIC_API_KEY=br_xxxxxxxxxxxx   # your BurnRate token, not your Anthropic key
+export ANTHROPIC_BASE_URL=https://tourniquet.ai
+export ANTHROPIC_API_KEY=tq_xxxxxxxxxxxx   # your Tourniquet token, not your Anthropic key
 ```
 
-That's it. Claude Code routes through BurnRate. Your Anthropic key never leaves your account.
+That's it. Claude Code routes through Tourniquet. Your Anthropic key never leaves your account.
 
 ## Drop-in for any Anthropic SDK
 
@@ -25,8 +25,8 @@ That's it. Claude Code routes through BurnRate. Your Anthropic key never leaves 
 import anthropic
 
 client = anthropic.Anthropic(
-    base_url="https://burnrate.ai",
-    api_key="br_xxxxxxxxxxxx",
+    base_url="https://tourniquet.ai",
+    api_key="tq_xxxxxxxxxxxx",
 )
 ```
 
@@ -53,7 +53,7 @@ See [docs/development.md](docs/development.md).
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). API keys are encrypted at rest with Fernet. BurnRate tokens are hashed with bcrypt. We never log raw keys.
+See [SECURITY.md](SECURITY.md). API keys are encrypted at rest with Fernet. Tourniquet tokens are hashed with bcrypt. We never log raw keys.
 
 ## Roadmap
 

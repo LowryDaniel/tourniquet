@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     secret_key: str
 
     resend_api_key: str = ""
-    resend_from_email: str = "alerts@burnrate.ai"
+    resend_from_email: str = "alerts@tourniquet.ai"
 
     sentry_dsn: str = ""
     app_env: str = "development"

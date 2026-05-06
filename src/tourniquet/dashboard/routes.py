@@ -17,11 +17,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from burnrate.billing.caps import get_today_spend
-from burnrate.billing.profiles import PROFILES
-from burnrate.config import settings
-from burnrate.db import get_session
-from burnrate.models import ApiKey, UsageEvent, User
+from tourniquet.billing.caps import get_today_spend
+from tourniquet.billing.profiles import PROFILES
+from tourniquet.config import settings
+from tourniquet.db import get_session
+from tourniquet.models import ApiKey, UsageEvent, User
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -36,9 +36,9 @@ def _require_user_id(request: Request) -> uuid.UUID:
     return uuid.UUID(uid)
 
 
-def _make_br_token() -> str:
-    """Generate a random br_* token (shown once, then hashed)."""
-    return "br_" + secrets.token_urlsafe(32)
+def _make_tq_token() -> str:
+    """Generate a random tq_* token (shown once, then hashed)."""
+    return "tq_" + secrets.token_urlsafe(32)
 
 
 def _hash_token(token: str) -> str:
@@ -106,7 +106,7 @@ async def create_key(
     if daily_cap_pence < 1:
         raise HTTPException(status_code=422, detail="Cap must be at least 1 pence.")
 
-    token = _make_br_token()
+    token = _make_tq_token()
     token_hash = _hash_token(token)
     encrypted_key = _encrypt_anthropic_key(anthropic_key)
 
@@ -114,7 +114,7 @@ async def create_key(
         key = ApiKey(
             user_id=user_id,
             name=name,
-            br_token_hash=token_hash,
+            tq_token_hash=token_hash,
             anthropic_key_encrypted=encrypted_key,
             profile=profile,
             daily_cap_pence=daily_cap_pence,

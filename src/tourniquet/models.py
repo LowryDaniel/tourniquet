@@ -45,7 +45,7 @@ class ApiKey(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    br_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    tq_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     anthropic_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[str] = mapped_column(String(50), nullable=False, default="hobby")
     daily_cap_pence: Mapped[int] = mapped_column(Integer, nullable=False, default=500)

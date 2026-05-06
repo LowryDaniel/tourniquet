@@ -1,6 +1,6 @@
 # API Reference
 
-BurnRate exposes two surfaces:
+Tourniquet exposes two surfaces:
 1. **Proxy API** — Anthropic-compatible, used by Claude Code and Anthropic SDKs
 2. **Dashboard API** — internal HTMX/Jinja2 endpoints; not a public REST API
 
@@ -8,9 +8,9 @@ BurnRate exposes two surfaces:
 
 ## Proxy API
 
-Base URL: `https://burnrate.ai`
+Base URL: `https://tourniquet.ai`
 
-Authentication: `Authorization: Bearer br_xxxxxxxxxxxx` (BurnRate token)
+Authentication: `Authorization: Bearer tq_xxxxxxxxxxxx` (Tourniquet token)
 
 ### POST /v1/messages
 
@@ -21,7 +21,7 @@ Transparent pass-through to `api.anthropic.com/v1/messages`. Accepts and returns
 - `anthropic-version` (default: `2023-06-01` if not provided)
 - `anthropic-beta` (if present)
 
-**Headers injected by BurnRate:**
+**Headers injected by Tourniquet:**
 - `x-api-key: sk-ant-...` (decrypted from user's stored key)
 - `authorization` header is stripped before forwarding
 
@@ -39,11 +39,11 @@ Transparent pass-through to `api.anthropic.com/v1/messages`. Accepts and returns
 ```
 
 **Streaming response (SSE):**
-Standard Anthropic SSE event sequence. BurnRate does not reformat events.
+Standard Anthropic SSE event sequence. Tourniquet does not reformat events.
 
 **Cap-hit response (mid-stream):**
 ```
-data: {"type":"message_stop","stop_reason":"burnrate_cap_hit"}
+data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}
 
 ```
 Connection closes after this event.
@@ -55,7 +55,7 @@ Content-Type: application/json
 
 {
   "error": {
-    "type": "burnrate_cap_hit",
+    "type": "tourniquet_cap_hit",
     "message": "Daily spend cap reached. Resets at midnight UTC.",
     "resets_at": "2026-05-06T00:00:00Z",
     "cap_pence": 500,
@@ -78,9 +78,9 @@ Returns 200 OK if the service is up. No auth required.
 
 | HTTP | `error.type` | Meaning |
 |---|---|---|
-| 401 | `invalid_token` | `br_*` token not found or malformed |
-| 402 | `burnrate_cap_hit` | Daily cap reached; try again after midnight UTC |
-| 429 | `rate_limited` | Too many requests (forwarded from Anthropic or BurnRate) |
+| 401 | `invalid_token` | `tq_*` token not found or malformed |
+| 402 | `tourniquet_cap_hit` | Daily cap reached; try again after midnight UTC |
+| 429 | `rate_limited` | Too many requests (forwarded from Anthropic or Tourniquet) |
 | 502 | `upstream_error` | Anthropic returned an error; body forwarded as-is |
 | 504 | `upstream_timeout` | Anthropic connection timed out (30s) |
 
@@ -102,4 +102,4 @@ These routes are HTML/HTMX — not for programmatic use.
 | `DELETE /dashboard/keys/{id}` | Delete a key |
 | `PATCH /dashboard/keys/{id}` | Update cap / profile / kill toggle |
 | `GET /dashboard/keys/{id}/usage` | Last 50 usage events for a key |
-| `GET /dashboard/keys/{id}/token` | Show br_* token (once only) |
+| `GET /dashboard/keys/{id}/token` | Show tq_* token (once only) |

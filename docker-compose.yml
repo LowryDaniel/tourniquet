@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: burnrate
-      POSTGRES_PASSWORD: burnrate
-      POSTGRES_DB: burnrate
+      POSTGRES_USER: tourniquet
+      POSTGRES_PASSWORD: tourniquet
+      POSTGRES_DB: tourniquet
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U burnrate"]
+      test: ["CMD-SHELL", "pg_isready -U tourniquet"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -21,7 +21,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://burnrate:burnrate@db:5432/burnrate
+      DATABASE_URL: postgresql+psycopg://tourniquet:tourniquet@db:5432/tourniquet
       APP_BASE_URL: http://localhost:8000
     env_file: .env
     ports:
@@ -30,7 +30,7 @@ services:
       - ./src:/app/src
       - ./templates:/app/templates
       - ./static:/app/static
-    command: uvicorn burnrate.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn tourniquet.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
   pgdata:

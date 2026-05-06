@@ -1,4 +1,4 @@
-app = "burnrate-web"
+app = "tourniquet-web"
 primary_region = "lhr"
 
 [build]

@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from burnrate.providers.anthropic import (
+from tourniquet.providers.anthropic import (
     CAP_HIT_EVENT,
     UsageAccumulator,
     stream_request,
@@ -87,7 +87,7 @@ async def test_stream_passes_through_under_cap():
         assert "message_start" in body
         assert "Hello" in body
         assert "message_stop" in body
-        assert "burnrate_cap_hit" not in body
+        assert "tourniquet_cap_hit" not in body
         assert final_acc is not None
         assert final_acc.input_tokens == 50
         assert final_acc.output_tokens == 5
@@ -123,5 +123,5 @@ async def test_stream_injects_cap_hit_event_mid_stream():
             chunks.append(chunk)
 
         body = b"".join(chunks).decode()
-        assert "burnrate_cap_hit" in body
+        assert "tourniquet_cap_hit" in body
         assert "This should NOT appear" not in body

@@ -8,10 +8,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from burnrate.auth.magic_link import router as auth_router
-from burnrate.config import settings
-from burnrate.dashboard.routes import router as dashboard_router
-from burnrate.proxy.router import router as proxy_router
+from tourniquet.auth.magic_link import router as auth_router
+from tourniquet.config import settings
+from tourniquet.dashboard.routes import router as dashboard_router
+from tourniquet.proxy.router import router as proxy_router
 
 
 @asynccontextmanager
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="BurnRate",
+        title="Tourniquet",
         version="0.1.0",
         docs_url=None,
         redoc_url=None,

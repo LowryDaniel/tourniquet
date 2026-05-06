@@ -1,6 +1,6 @@
 """Pricing calculations — pence integer, no float drift."""
 
-from burnrate.billing.pricing import cost_pence
+from tourniquet.billing.pricing import cost_pence
 
 
 def test_cost_pence_zero_tokens():

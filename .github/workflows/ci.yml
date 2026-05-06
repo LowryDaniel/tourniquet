@@ -14,9 +14,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: burnrate
+          POSTGRES_USER: tourniquet
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: burnrate_test
+          POSTGRES_DB: tourniquet_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -44,17 +44,17 @@ jobs:
 
       - name: Run migrations
         env:
-          DATABASE_URL: postgresql+psycopg://burnrate:test@localhost:5432/burnrate_test
+          DATABASE_URL: postgresql+psycopg://tourniquet:test@localhost:5432/tourniquet_test
           FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
           SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
         run: alembic upgrade head
 
       - name: Tests
         env:
-          DATABASE_URL: postgresql+psycopg://burnrate:test@localhost:5432/burnrate_test
+          DATABASE_URL: postgresql+psycopg://tourniquet:test@localhost:5432/tourniquet_test
           FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
           SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
-        run: pytest --cov=burnrate --cov-report=term-missing
+        run: pytest --cov=tourniquet --cov-report=term-missing
 
   deploy:
     needs: test
@@ -69,9 +69,9 @@ jobs:
       - name: Deploy web app
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --app burnrate-web --config fly.toml --remote-only
+        run: flyctl deploy --app tourniquet-web --config fly.toml --remote-only
 
       - name: Deploy worker
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --app burnrate-worker --config fly.worker.toml --remote-only
+        run: flyctl deploy --app tourniquet-worker --config fly.worker.toml --remote-only

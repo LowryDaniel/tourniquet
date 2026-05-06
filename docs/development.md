@@ -11,8 +11,8 @@
 
 ```bash
 # Clone
-git clone git@github.com:LowryDaniel/burnrate.git
-cd burnrate
+git clone git@github.com:LowryDaniel/tourniquet.git
+cd tourniquet
 
 # Virtual environment
 python3 -m venv .venv
@@ -29,11 +29,11 @@ cp .env.example .env
 #   SECRET_KEY    (generate with the command in .env.example)
 
 # Database
-createdb burnrate
+createdb tourniquet
 alembic upgrade head
 
 # Run
-uvicorn burnrate.main:app --reload --port 8000
+uvicorn tourniquet.main:app --reload --port 8000
 ```
 
 Open http://localhost:8000.
@@ -63,7 +63,7 @@ ruff format . && ruff check --fix .
 pytest
 
 # With coverage
-pytest --cov=burnrate --cov-report=term-missing
+pytest --cov=tourniquet --cov-report=term-missing
 
 # Specific test file
 pytest tests/test_proxy.py -v
@@ -97,7 +97,7 @@ python3 -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(3
 ## Project structure
 
 ```
-src/burnrate/
+src/tourniquet/
     main.py             # FastAPI app factory, lifespan, middleware
     config.py           # Pydantic Settings — all env vars typed
     models.py           # SQLAlchemy ORM models

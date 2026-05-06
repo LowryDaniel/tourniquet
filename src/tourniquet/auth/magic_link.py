@@ -19,9 +19,9 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from burnrate.config import settings
-from burnrate.db import get_session
-from burnrate.models import User
+from tourniquet.config import settings
+from tourniquet.db import get_session
+from tourniquet.models import User
 
 router = APIRouter(prefix="/auth")
 
@@ -62,7 +62,7 @@ async def send_magic_link(request: Request, email: str = Form(...)) -> HTMLRespo
         resend.Emails.send({
             "from": settings.resend_from_email,
             "to": [email],
-            "subject": "Sign in to BurnRate",
+            "subject": "Sign in to Tourniquet",
             "html": f'<p>Click to sign in (expires in 15 minutes):</p><p><a href="{link}">{link}</a></p>',
         })
 

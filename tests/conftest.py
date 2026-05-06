@@ -9,7 +9,7 @@ Tests use:
 import pytest
 from fastapi.testclient import TestClient
 
-from burnrate.main import app
+from tourniquet.main import app
 
 
 @pytest.fixture()

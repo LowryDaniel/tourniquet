@@ -11,7 +11,7 @@ fileConfig(config.config_file_name)  # type: ignore[arg-type]
 config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 # Import models so autogenerate can see them
-from burnrate.models import Base  # noqa: F401
+from tourniquet.models import Base  # noqa: F401
 
 target_metadata = Base.metadata
 
