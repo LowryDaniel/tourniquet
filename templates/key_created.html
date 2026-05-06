@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Key created — BurnRate{% endblock %}
+{% block content %}
+<section class="auth">
+  <h1>Key "{{ name }}" created</h1>
+  <p class="warn"><strong>Copy your BurnRate token now.</strong> It won't be shown again.</p>
+
+  <div class="token-box">
+    <code id="token">{{ token }}</code>
+    <button onclick="navigator.clipboard.writeText('{{ token }}')">Copy</button>
+  </div>
+
+  <h2>Drop-in for Claude Code</h2>
+  <pre><code>export ANTHROPIC_BASE_URL={{ app_base_url }}
+export ANTHROPIC_API_KEY={{ token }}</code></pre>
+
+  <h2>Drop-in for Anthropic SDK</h2>
+  <pre><code>import anthropic
+client = anthropic.Anthropic(
+    base_url="{{ app_base_url }}",
+    api_key="{{ token }}",
+)</code></pre>
+
+  <a href="/dashboard" class="btn-primary">Go to dashboard</a>
+</section>
+{% endblock %}

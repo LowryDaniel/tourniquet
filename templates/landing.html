@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}BurnRate — Stop the burn{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Stop the next £47K token burn.</h1>
+  <p class="sub">A free, drop-in Anthropic proxy. Set a daily spend cap. We kill the agent before it costs you the rent.</p>
+  <a href="/login" class="btn-primary">Get started — it's free</a>
+</section>
+
+<section class="how">
+  <h2>Two environment variables. That's it.</h2>
+  <pre><code>export ANTHROPIC_BASE_URL=https://burnrate.ai
+export ANTHROPIC_API_KEY=br_xxxxxxxxxxxx</code></pre>
+  <p>Claude Code, LangChain, any Anthropic SDK — no code changes.</p>
+</section>
+
+<section class="features">
+  <div class="feature">
+    <h3>Hard kill switch</h3>
+    <p>When your daily cap is hit, in-flight streams are terminated cleanly. No half-token corruption. 402s until midnight UTC.</p>
+  </div>
+  <div class="feature">
+    <h3>Multiple keys</h3>
+    <p>Register N Anthropic keys. Separate "prod" from "experiments". Revoke one without touching the others.</p>
+  </div>
+  <div class="feature">
+    <h3>Email alerts</h3>
+    <p>One alert per day when you hit 80% of your cap. Idempotent. No spam.</p>
+  </div>
+</section>
+{% endblock %}

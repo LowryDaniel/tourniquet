@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Usage: {{ key.name }} — BurnRate{% endblock %}
+{% block content %}
+<section class="usage">
+  <h1>Usage: {{ key.name }}</h1>
+  <a href="/dashboard">← Back</a>
+
+  {% if events %}
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Model</th>
+        <th>In</th>
+        <th>Out</th>
+        <th>Cost</th>
+        <th>Cap hit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr class="{% if e.cap_hit %}cap-hit-row{% endif %}">
+        <td>{{ e.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td>{{ e.model }}</td>
+        <td>{{ e.input_tokens }}</td>
+        <td>{{ e.output_tokens }}</td>
+        <td>£{{ "%.4f"|format(e.cost_pence / 100) }}</td>
+        <td>{% if e.cap_hit %}🛑{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No usage yet for this key.</p>
+  {% endif %}
+</section>
+{% endblock %}

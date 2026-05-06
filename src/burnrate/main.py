@@ -6,8 +6,12 @@ from typing import AsyncGenerator
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from burnrate.auth.magic_link import router as auth_router
 from burnrate.config import settings
+from burnrate.dashboard.routes import router as dashboard_router
+from burnrate.proxy.router import router as proxy_router
 
 
 @asynccontextmanager
@@ -26,15 +30,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-    # Routes registered here in W1 build:
-    # from burnrate.proxy.router import router as proxy_router
-    # from burnrate.dashboard.routes import router as dashboard_router
-    # from burnrate.auth.magic_link import router as auth_router
-    # app.include_router(proxy_router)
-    # app.include_router(dashboard_router)
-    # app.include_router(auth_router)
+    app.include_router(proxy_router)
+    app.include_router(auth_router)
+    app.include_router(dashboard_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

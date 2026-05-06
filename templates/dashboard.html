@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — BurnRate{% endblock %}
+{% block content %}
+<section class="dashboard">
+  <div class="dashboard-header">
+    <h1>Dashboard</h1>
+    <button class="btn-primary" onclick="document.getElementById('add-key-modal').showModal()">+ Add key</button>
+  </div>
+
+  {% if keys %}
+    <div class="key-grid">
+      {% for k in keys %}
+      <div class="key-card {% if k.pct >= 100 %}cap-hit{% elif k.pct >= 80 %}cap-warn{% endif %}">
+        <div class="key-card-header">
+          <span class="key-name">{{ k.name }}</span>
+          <span class="key-profile badge">{{ k.profile }}</span>
+        </div>
+        <div class="spend-bar">
+          <div class="spend-fill" style="width: {{ [k.pct, 100] | min }}%"></div>
+        </div>
+        <div class="spend-label">
+          £{{ "%.2f"|format(k.spent_pence / 100) }} / £{{ "%.2f"|format(k.daily_cap_pence / 100) }}
+          <span class="pct">({{ k.pct }}%)</span>
+        </div>
+        <div class="key-actions">
+          <a href="/dashboard/keys/{{ k.id }}/usage" class="btn-small">Usage</a>
+          <button class="btn-small btn-edit"
+                  hx-get="/dashboard/keys/{{ k.id }}/edit"
+                  hx-target="#edit-container"
+                  hx-swap="innerHTML">Edit</button>
+          <form action="/dashboard/keys/{{ k.id }}" method="post"
+                hx-delete="/dashboard/keys/{{ k.id }}"
+                hx-confirm="Delete key {{ k.name }}? This cannot be undone."
+                hx-target="closest .key-card"
+                hx-swap="outerHTML">
+            <button type="submit" class="btn-small btn-danger">Delete</button>
+          </form>
+        </div>
+        {% if k.kill_enabled %}
+          <span class="kill-badge">kill on</span>
+        {% else %}
+          <span class="kill-badge kill-off">kill off</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No keys yet. Add your first Anthropic key to get started.</p>
+  {% endif %}
+
+  <div id="edit-container"></div>
+</section>
+
+<dialog id="add-key-modal">
+  <form action="/dashboard/keys" method="post"
+        hx-post="/dashboard/keys" hx-target="#modal-result" hx-swap="innerHTML">
+    <h2>Add Anthropic key</h2>
+    <label>Name (e.g. "prod", "dev")
+      <input type="text" name="name" required placeholder="dev" maxlength="100">
+    </label>
+    <label>Anthropic key
+      <input type="password" name="anthropic_key" required placeholder="sk-ant-...">
+    </label>
+    <label>Daily cap (£)
+      <input type="number" name="daily_cap_pence" value="5" min="0.01" step="0.01"
+             onchange="this.value = Math.round(this.value * 100)"
+             oninput="this.setAttribute('value', Math.round(parseFloat(this.value||0)*100))">
+    </label>
+    <label>Profile
+      <select name="profile">
+        {% for p in profiles %}
+          <option value="{{ p }}">{{ p|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <input type="checkbox" name="kill_enabled" value="true" checked> Enable kill switch
+    </label>
+    <label>Alert email (optional, defaults to account email)
+      <input type="email" name="alert_email" placeholder="">
+    </label>
+    <div class="modal-actions">
+      <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="submit" class="btn-primary">Add key</button>
+    </div>
+    <div id="modal-result"></div>
+  </form>
+</dialog>
+{% endblock %}
