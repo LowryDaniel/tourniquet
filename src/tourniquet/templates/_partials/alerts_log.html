@@ -1,0 +1,34 @@
+<div class="alerts-log"
+     id="alerts-log-{{ key_id }}"
+     hx-get="/dashboard/key/{{ key_id }}/alerts"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
+
+  <h3 class="section-heading">Alert log (last 50 cap-hits)</h3>
+
+  {% if alert_log %}
+  <table class="alert-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Model</th>
+        <th>Cost</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ev in alert_log %}
+      <tr>
+        <td>{{ ev.ts.strftime('%Y-%m-%d %H:%M') if ev.ts else '—' }}</td>
+        <td>{{ ev.model }}</td>
+        <td>{{ ev.cost_display }}</td>
+        <td>🛑</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No cap-hit events yet.</p>
+  {% endif %}
+
+</div>

@@ -14,26 +14,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_today_spend(api_key_id: uuid.UUID, today: date, session: AsyncSession) -> int:
+    """Return today's total spend in USD cents, or 0 if no row exists."""
     result = await session.execute(
-        text("SELECT total_pence FROM caps_today WHERE api_key_id = :kid AND date = :d"),
+        text("SELECT total_usd_cents FROM caps_today WHERE api_key_id = :kid AND date = :d"),
         {"kid": str(api_key_id), "d": today},
     )
     row = result.first()
     return row[0] if row else 0
 
 
-def is_over_cap(spent_pence: int, cap_pence: int) -> bool:
-    return spent_pence >= cap_pence
+def is_over_cap(spent_cents: int, cap_cents: int) -> bool:
+    return spent_cents >= cap_cents
 
 
-async def add_spend(api_key_id: uuid.UUID, today: date, amount_pence: int, session: AsyncSession) -> None:
-    """Atomically increment caps_today, inserting the row if it doesn't exist."""
+async def add_spend(api_key_id: uuid.UUID, today: date, amount_cents: int, session: AsyncSession) -> None:
+    """Atomically increment caps_today in USD cents, inserting the row if it doesn't exist."""
     await session.execute(
         text("""
-            INSERT INTO caps_today (api_key_id, date, total_pence)
+            INSERT INTO caps_today (api_key_id, date, total_usd_cents)
             VALUES (:kid, :d, :amount)
             ON CONFLICT (api_key_id, date)
-            DO UPDATE SET total_pence = caps_today.total_pence + EXCLUDED.total_pence
+            DO UPDATE SET total_usd_cents = caps_today.total_usd_cents + EXCLUDED.total_usd_cents
         """),
-        {"kid": str(api_key_id), "d": today, "amount": amount_pence},
+        {"kid": str(api_key_id), "d": today, "amount": amount_cents},
     )

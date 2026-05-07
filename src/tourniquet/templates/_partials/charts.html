@@ -1,0 +1,95 @@
+<div class="charts-block"
+     id="charts-{{ key_id }}"
+     hx-get="/dashboard/key/{{ key_id }}/charts"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
+
+  <h3 class="section-heading">Charts — last 14 days</h3>
+
+  {# Daily sparkline #}
+  <div class="chart-row">
+    <div class="chart-label">Daily spend</div>
+    <div class="sparkline-wrap">
+      {% set max_val = daily_totals|max if daily_totals else 1 %}
+      {% set max_val = max_val if max_val > 0 else 1 %}
+      <svg class="sparkline" viewBox="0 0 280 40" preserveAspectRatio="none">
+        {% for i in range(daily_totals|length) %}
+          {% set h = (daily_totals[i] / max_val * 38)|int %}
+          {% set x = (i / (daily_totals|length - 1) * 280) if daily_totals|length > 1 else 140 %}
+          <rect x="{{ x - 4 }}" y="{{ 40 - h }}" width="8" height="{{ h }}"
+                fill="{% if daily_totals[i] == max_val %}#ff4444{% else %}#ff6633{% endif %}"
+                opacity="0.85"/>
+        {% endfor %}
+      </svg>
+    </div>
+  </div>
+
+  {# Model breakdown #}
+  {% if insights.by_model %}
+  <div class="chart-row">
+    <div class="chart-label">By model</div>
+    <div class="breakdown-list">
+      {% for row in insights.by_model %}
+      <div class="breakdown-row">
+        <span class="breakdown-name">{{ row.name }}</span>
+        <div class="breakdown-bar-wrap">
+          <div class="breakdown-bar" style="width:{{ row.pct_of_total }}%"></div>
+        </div>
+        <span class="breakdown-pct">{{ row.pct_of_total }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Heatmap #}
+  <div class="chart-row chart-row-col">
+    <div class="chart-label">Hourly heatmap (28 days)</div>
+    {% include "_partials/heatmap.html" %}
+  </div>
+
+  {# By caller #}
+  {% if insights.by_caller %}
+  <div class="chart-row">
+    <div class="chart-label">By caller</div>
+    <table class="mini-table">
+      <thead><tr><th>User-agent</th><th>Cost</th><th>Reqs</th><th>%</th></tr></thead>
+      <tbody>
+      {% for row in insights.by_caller %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.cost_cents | format_money_filter }}</td>
+          <td>{{ row.request_count }}</td>
+          <td>{{ row.pct_of_total }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# By metadata.user_id #}
+  {% if insights.by_metadata_user_id %}
+  <div class="chart-row">
+    <div class="chart-label">By user_id</div>
+    <table class="mini-table">
+      <thead><tr><th>user_id</th><th>Cost</th><th>Reqs</th><th>%</th></tr></thead>
+      <tbody>
+      {% for row in insights.by_metadata_user_id %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.cost_cents | format_money_filter }}</td>
+          <td>{{ row.request_count }}</td>
+          <td>{{ row.pct_of_total }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not insights.by_model and not daily_totals|select|list %}
+  <p class="empty">No usage data yet.</p>
+  {% endif %}
+
+</div>

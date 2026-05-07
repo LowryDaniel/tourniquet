@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d0d0d"/>
+      <stop offset="100%" style="stop-color:#111111"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8eff8e;stop-opacity:0.08"/>
+      <stop offset="100%" style="stop-color:#8eff8e;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle glow top -->
+  <ellipse cx="600" cy="-80" rx="600" ry="300" fill="url(#glow)"/>
+
+  <!-- Grid lines (subtle) -->
+  <g stroke="#1e1e1e" stroke-width="1" opacity="0.5">
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+  </g>
+
+  <!-- Terminal window -->
+  <rect x="100" y="80" width="660" height="300" rx="10" ry="10" fill="#161616" stroke="#2a2a2a" stroke-width="1.5"/>
+
+  <!-- Terminal titlebar -->
+  <rect x="100" y="80" width="660" height="40" rx="10" ry="10" fill="#1e1e1e"/>
+  <rect x="100" y="100" width="660" height="20" fill="#1e1e1e"/>
+
+  <!-- Traffic light dots -->
+  <circle cx="126" cy="100" r="7" fill="#ff5f57"/>
+  <circle cx="152" cy="100" r="7" fill="#febc2e"/>
+  <circle cx="178" cy="100" r="7" fill="#28c840"/>
+
+  <!-- Terminal title text -->
+  <text x="430" y="105" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#666" text-anchor="middle">tourniquet — proxy</text>
+
+  <!-- Terminal content lines -->
+  <text x="130" y="152" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#666">$ claude "refactor all 800 files in /src"</text>
+  <text x="130" y="178" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#88bbdd">Streaming response... </text>
+  <text x="130" y="204" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#7aa8c8">I'll start by analysing the structure of each</text>
+  <text x="130" y="230" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#5a7ea0">file, then apply consistent refactoring pat</text>
+
+  <!-- Kill line -->
+  <rect x="120" y="248" width="640" height="28" rx="4" fill="rgba(255,107,107,0.08)"/>
+  <text x="130" y="268" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#ff6b6b" font-weight="bold">⚡ CAP HIT — $15.00/day limit reached. Stream terminated.</text>
+
+  <!-- SSE event -->
+  <text x="130" y="302" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#666">event: message_stop</text>
+  <text x="130" y="323" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#555">data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}</text>
+
+  <!-- Right side branding -->
+  <!-- Lock icon (simple SVG path) -->
+  <rect x="870" y="165" width="60" height="50" rx="6" fill="#8eff8e" opacity="0.1" stroke="#8eff8e" stroke-width="1.5" stroke-opacity="0.4"/>
+  <rect x="881" y="175" width="38" height="28" rx="4" fill="none" stroke="#8eff8e" stroke-width="2.5"/>
+  <path d="M891 175 v-10 a9 9 0 0 1 18 0 v10" fill="none" stroke="#8eff8e" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="900" cy="187" r="3.5" fill="#8eff8e"/>
+  <line x1="900" y1="190" x2="900" y2="197" stroke="#8eff8e" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Logo text -->
+  <text x="900" y="252" font-family="ui-monospace, Menlo, monospace" font-size="32" fill="#e8e8e8" text-anchor="middle" font-weight="700" letter-spacing="-1">tourniquet</text>
+
+  <!-- Tagline -->
+  <text x="900" y="284" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" fill="#888" text-anchor="middle">Stop runaway Claude API spend</text>
+
+  <!-- Accent pill -->
+  <rect x="820" y="310" width="160" height="30" rx="15" fill="rgba(142,255,142,0.12)" stroke="rgba(142,255,142,0.35)" stroke-width="1"/>
+  <text x="900" y="330" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#8eff8e" text-anchor="middle" font-weight="600" letter-spacing="0.08em">FREE · LOCAL-FIRST · MIT</text>
+
+  <!-- Bottom headline -->
+  <text x="600" y="460" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="28" fill="#e8e8e8" text-anchor="middle" font-weight="800" letter-spacing="-0.5">Hard-cap your Anthropic API in 60 seconds</text>
+
+  <!-- Bottom sub -->
+  <text x="600" y="498" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" fill="#666" text-anchor="middle">pip install tourniquet &amp;&amp; tourniquet</text>
+
+  <!-- Domain -->
+  <text x="600" y="578" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" fill="#444" text-anchor="middle">tourniquet.dev</text>
+</svg>

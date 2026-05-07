@@ -1,68 +1,203 @@
 # Tourniquet
 
-**Stop the next £47K token burn before it costs you the rent.**
+**A local Anthropic API proxy with a hard daily spend cap.**
 
-Tourniquet is a free, drop-in Anthropic API proxy that enforces a hard daily £ spend cap per API key. When the cap is hit, in-flight streams are killed cleanly and subsequent requests return `402` until midnight UTC.
+You left an agent running overnight. You woke up to a bill. Tourniquet makes that impossible.
 
-## Why
+---
 
-- The 1.67-billion-token Claude Code incident. The £47K LangChain loop. Every developer running unattended agents is one bad weekend away from a bill they can't pay.
-- Anthropic has no native per-key spending caps.
-- Tourniquet is a transparent proxy — zero code changes beyond two environment variables.
+## Why this exists
 
-## Drop-in for Claude Code
+Claude Code, ojw-swarm, LangChain loops — unattended agents are great until they aren't. A single runaway tool-call chain or a prompt that spawns sub-agents that spawn sub-agents can hit $50 before you check your phone. The Anthropic Console has spend alerts, but alerts are not caps: the tokens keep flowing after the email lands in your inbox.
+
+Existing proxies (LiteLLM, Helicone) are built for teams with dashboards, API keys, billing admins, and budgets-per-project. They're overkill if you're one person who just wants to not get burned. Helicone is SaaS-first. LiteLLM's budget enforcement cuts the TCP connection mid-stream, which crashes your agent instead of letting it finish gracefully.
+
+Tourniquet is for the solo dev who runs Claude all day and needs exactly one thing: a hard ceiling, locally enforced, with no third-party seeing your prompts or your key.
+
+---
+
+## What it does
+
+**Caps**
+- Hard daily cap in any currency (USD, GBP, EUR, JPY, CAD, AUD)
+- Mid-stream kill via synthetic SSE `message_stop` — the agent loop sees a clean stop, not a crash (more below)
+- Lift cap for today via dashboard, CLI, or Telegram — multiply cap by N, or raise to ceiling
+- Auto-tune: suggests a sensible starting cap from your Anthropic usage history (admin-key fetch) or the last 7 days of your `usage_events`
+
+**Alerts**
+- Desktop notifications (macOS/Linux/Windows)
+- Slack, Telegram (with inline lift buttons), email
+- JSONL log for scripting
+
+**Insights**
+- Per-key daily sparkline, model breakdown, hourly heatmap
+- By-caller and by `metadata.user_id` breakdown — see which agent is spending
+- All stored in SQLite on your machine
+
+**Privacy**
+- 100% local: SQLite, no telemetry, no Tourniquet account, no cloud dependency
+- Anthropic key encrypted at rest; `tq_` proxy tokens hashed with bcrypt
+- Dashboard at `http://127.0.0.1:8787/dashboard` — vanilla HTMX, no SPA, works offline
+
+---
+
+## Quick install
+
+> **Note:** Tourniquet is not yet on PyPI. Use the `git clone` path below. `pip install tourniquet-dev` will work once the first release ships.
+
+**macOS / Linux**
 
 ```bash
-export ANTHROPIC_BASE_URL=https://tourniquet.ai
-export ANTHROPIC_API_KEY=tq_xxxxxxxxxxxx   # your Tourniquet token, not your Anthropic key
+git clone https://github.com/danlowry/tourniquet
+cd tourniquet
+pip install -e .
+tourniquet
 ```
 
-That's it. Claude Code routes through Tourniquet. Your Anthropic key never leaves your account.
+**Windows (PowerShell)**
 
-## Drop-in for any Anthropic SDK
+```powershell
+git clone https://github.com/danlowry/tourniquet
+cd tourniquet
+pip install -e .
+tourniquet
+```
+
+See [docs/install.md](docs/install.md) for virtual-env setup, `pipx`, and Windows `cmd.exe` instructions.
+
+---
+
+## First-run flow
+
+1. Run `tourniquet` — the dashboard opens at `http://127.0.0.1:8787/dashboard`
+2. Paste your `sk-ant-…` key and set a daily cap
+3. Point your agent at `http://127.0.0.1:8787` with your `tq_…` proxy token
+
+**Drop-in for Claude Code:**
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8787
+export ANTHROPIC_API_KEY=tq_xxxxxxxxxxxx
+```
+
+**Drop-in for the Anthropic SDK:**
 
 ```python
 import anthropic
 
 client = anthropic.Anthropic(
-    base_url="https://tourniquet.ai",
+    base_url="http://127.0.0.1:8787",
     api_key="tq_xxxxxxxxxxxx",
 )
 ```
 
-## Features (v1)
+---
 
-- **Hard kill switch** — when today's £ spend > cap, terminate in-flight stream mid-token + 402 subsequent requests until midnight UTC
-- **Multiple API keys per account** — register N Anthropic keys, name them ("prod", "dev", "claude-code-experiments"), each with its own cap and profile
-- **Three pre-built profiles** — Hobby / Production / Demo — preset alert thresholds and kill behaviour
-- **Email alerts at 80%** — one per day per key via Resend, idempotent
-- **Dashboard** — today's spend per key, cap config, profile picker, last 50 usage events
-- **Magic-link auth** — no passwords
+## The kill mechanism
 
-## Architecture overview
+Most proxies enforce caps by dropping the TCP connection when the budget is exceeded. Your agent sees a network error, throws an exception, and either crashes or retries — which may spend more.
 
-See [docs/architecture.md](docs/architecture.md).
+Tourniquet injects a synthetic SSE event into the in-flight stream:
 
-## Self-hosting
+```json
+{
+  "type": "message_stop",
+  "stop_reason": "tourniquet_cap_hit",
+  "tourniquet": {
+    "daily_cap_usd": 10.00,
+    "spend_usd": 10.03,
+    "resets_at": "2026-05-08T00:00:00Z"
+  }
+}
+```
 
-See [docs/deployment.md](docs/deployment.md). Runs on Fly.io for ~£10/month. Free tier covers the first N users.
+The Anthropic SDK treats this as a normal `message_stop`. Your agent loop finishes cleanly. Subsequent requests in the same day return `402 Payment Required` with the same metadata. The cap resets at midnight UTC.
 
-## Development
+No other proxy does this. They cut the wire. Tourniquet closes the valve.
 
-See [docs/development.md](docs/development.md).
+---
 
-## Security
+## Privacy & local-first guarantees
 
-See [SECURITY.md](SECURITY.md). API keys are encrypted at rest with Fernet. Tourniquet tokens are hashed with bcrypt. We never log raw keys.
+Your prompts, completions, and Anthropic key never leave your machine. Tourniquet proxies traffic through `localhost` — `api.anthropic.com` sees requests from your IP, exactly as if you called it directly.
+
+Short version:
+- No Tourniquet account required
+- No analytics sent anywhere
+- SQLite database is yours; delete it to wipe all history
+- Key encrypted at rest with Fernet; proxy tokens hashed with bcrypt
+
+Full details: [docs/data-residency.md](docs/data-residency.md) and the [`/trust`](http://127.0.0.1:8787/trust) page in the running dashboard.
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and edit. The most important variables:
+
+```
+TOURNIQUET_CAP_USD=10.00
+TOURNIQUET_CURRENCY=USD
+TOURNIQUET_ALERT_PCT=80
+```
+
+CLI quick-reference:
+
+```bash
+tourniquet status          # current spend, cap, time to reset
+tourniquet lift --x 2      # double today's cap
+tourniquet lift --ceil      # remove cap for today
+tourniquet keys            # list registered Anthropic keys
+```
+
+See `.env.example` for the full list of alert and integration variables.
+
+---
+
+## Architecture
+
+```
+  your agent / Claude Code / SDK
+           │
+           │  http://127.0.0.1:8787
+           ▼
+  ┌─────────────────────┐
+  │    Tourniquet        │
+  │  ┌───────────────┐  │     ┌──────────────┐
+  │  │  Spend ledger │◄─┼────►│  SQLite DB   │
+  │  └───────────────┘  │     └──────────────┘
+  │  ┌───────────────┐  │     ┌──────────────┐
+  │  │  SSE injector │  │     │  Dashboard   │
+  │  └───────────────┘  │     │  :8787       │
+  │  ┌───────────────┐  │     └──────────────┘
+  │  │  Alert router │─►│─────► Slack/Telegram/
+  │  └───────────────┘  │       Desktop/Email
+  └──────────┬──────────┘
+             │  proxied requests
+             ▼
+      api.anthropic.com
+```
+
+---
 
 ## Roadmap
 
-| Version | Target | Scope |
-|---|---|---|
-| v1 | Week 1 | Anthropic proxy + multi-key dashboard + profiles + kill switch |
-| v2 | On user request | OpenAI support (~6h with provider interface already in place) |
-| v3 | 500+ users | Stripe % billing (2.5% of pass-through spend, capped at £29/mo) |
+- **v0.2** — macOS menu-bar app (tray icon shows today's spend)
+- **v0.2** — MCP server so Claude Code can query its own remaining budget mid-run
+- **v0.2** — Pre-built binaries (no Python required): `brew install tourniquet`, MSI, AppImage
+- **v0.2** — Per-model sub-caps (e.g. cap Opus-4 at $5/day, Sonnet at $15/day)
+- **v0.3** — OpenAI proxy (provider interface already stubbed)
+- **v0.3** — Team mode: shared SQLite over LAN, per-user `tq_` tokens
+- **Future** — Grafana datasource plugin for spend dashboards
 
-## Status
+---
 
-Pre-launch. Building week of 2026-05-05.
+## Contributing
+
+Pull requests welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers the dev-server setup, the SQLite migration pattern, and the SSE injection test harness. Open an issue before starting large changes so we can agree on the approach.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

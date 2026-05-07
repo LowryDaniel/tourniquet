@@ -24,7 +24,7 @@
         <td>{{ e.model }}</td>
         <td>{{ e.input_tokens }}</td>
         <td>{{ e.output_tokens }}</td>
-        <td>£{{ "%.4f"|format(e.cost_pence / 100) }}</td>
+        <td>{{ e.cost_display }}</td>
         <td>{% if e.cap_hit %}🛑{% endif %}</td>
       </tr>
       {% endfor %}

@@ -22,8 +22,8 @@ from typing import Any
 async def evaluate(
     *,
     condition: dict[str, Any],
-    spent_pence: int,
-    cap_pence: int,
+    spent_usd_cents: int,
+    cap_usd_cents: int,
     enabled: bool,
 ) -> bool:
     """Return True if the trigger condition is met.
@@ -37,7 +37,7 @@ async def evaluate(
 
     if ctype == "spend_threshold_pct":
         threshold_pct = condition.get("pct", 80)
-        pct = (spent_pence / cap_pence * 100) if cap_pence else 0
+        pct = (spent_usd_cents / cap_usd_cents * 100) if cap_usd_cents else 0
         return pct >= threshold_pct
 
     if ctype == "spend_3x_baseline":

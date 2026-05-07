@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Trust & data residency — Tourniquet{% endblock %}
+{% block content %}
+<div class="form-page trust-page">
+  <h1>🔒 Your data, your machine</h1>
+
+  <p class="lede">Tourniquet is a <strong>local-first proxy</strong>. Every byte of your usage data lives on this {{ device_label(request) }}. There is no cloud, no telemetry, no remote &ldquo;Tourniquet account&rdquo;.</p>
+
+  <div class="trust-grid">
+    <div class="trust-card trust-card-stays">
+      <h2>✅ Stays on this machine</h2>
+      <ul>
+        <li>Your <strong>Anthropic API key</strong>, AES-256 encrypted on disk (Fernet)</li>
+        <li>Your <strong>tq_ tokens</strong>, bcrypt-hashed (not recoverable, even by us)</li>
+        <li>Per-request <strong>token counts and cost</strong> in pence/cents</li>
+        <li>Model name, timestamp, user-agent, optional <code>metadata.user_id</code></li>
+        <li>Daily cap totals, alert log (<code>~/.tourniquet/alerts.jsonl</code>)</li>
+        <li><strong>Insights</strong> &mdash; computed locally from your DB; no external lookups</li>
+      </ul>
+    </div>
+
+    <div class="trust-card trust-card-leaves">
+      <h2>🌐 Goes to the network (and only here)</h2>
+      <ul>
+        <li><strong>Anthropic</strong> &mdash; your proxied request body, exactly as you sent it. Same as if you called them directly.</li>
+        <li><strong>Your alert channels</strong> &mdash; only if you've configured them: Slack webhook, Telegram bot, Resend email, generic webhook. Each receives only the alert text (key name + spend amount). <strong>No prompt content, no response content.</strong></li>
+      </ul>
+      <p class="muted-hint">No telemetry. Nothing goes to a Tourniquet-operated server &mdash; there isn't one.</p>
+    </div>
+
+    <div class="trust-card trust-card-never">
+      <h2>🚫 Never stored, never sent</h2>
+      <ul>
+        <li><strong>Prompt content</strong> &mdash; the body is forwarded opaquely; we don't read or persist it</li>
+        <li><strong>Response content</strong> &mdash; streamed straight to your client; nothing is written to disk</li>
+        <li><strong>Your IP address</strong> &mdash; not logged</li>
+        <li><strong>Your Anthropic admin key</strong> (used once at bootstrap for history lookup) &mdash; held only in process memory, <code>del</code>'d immediately after use, never written anywhere</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Threat model</h2>
+  <table class="trust-table">
+    <tr><th>Threat</th><th>Mitigation</th></tr>
+    <tr><td>Prompt leakage via Tourniquet</td><td>Tourniquet never reads or stores message bodies &mdash; it streams them opaquely</td></tr>
+    <tr><td>Anthropic key theft via DB dump</td><td>Key is AES-256 encrypted; attacker needs both the DB <em>and</em> the <code>FERNET_KEY</code> env var</td></tr>
+    <tr><td>tq_ token forgery</td><td>Tokens are bcrypt'd (cost 12); timing-safe comparison in auth</td></tr>
+    <tr><td>Outbound exfiltration via insights</td><td>The insights module is statically asserted to import no network library &mdash; <code>tests/test_insights.py::test_no_network_imports</code></td></tr>
+    <tr><td>Someone else on your network reading the dashboard</td><td>Tourniquet binds to <code>127.0.0.1</code> only. Not reachable from your LAN unless you tunnel it.</td></tr>
+  </table>
+
+  <h2>Verify it yourself</h2>
+  <p>From the directory you cloned Tourniquet into, run any of these to audit independently:</p>
+  <ol>
+    <li>
+      <strong>Search for telemetry hooks</strong><br>
+      macOS/Linux: <code>grep -r "telemetry\|posthog\|segment\|sentry" src/</code><br>
+      Windows PowerShell: <code>Select-String -Path src\* -Pattern "telemetry|posthog|segment|sentry" -Recurse</code><br>
+      The only Sentry hit is in <code>main.py</code> behind an opt-in <code>SENTRY_DSN</code> env var (empty by default).
+    </li>
+    <li>
+      <strong>Inspect open network connections</strong> while the proxy is running:<br>
+      macOS/Linux: <code>lsof -i -P | grep python</code><br>
+      Windows PowerShell: <code>Get-NetTCPConnection -State Listen | Where-Object OwningProcess -in (Get-Process python).Id</code><br>
+      You should only see <code>127.0.0.1</code> (dashboard), <code>api.anthropic.com</code> (proxied requests), and any alert channels you configured.
+    </li>
+    <li>Read <code>docs/data-residency.md</code> for the full architecture explanation</li>
+    <li>Inspect the SQLite DB directly: <code>sqlite3 tourniquet_dev.db ".schema"</code> &mdash; confirm it has columns for <code>cost_usd_cents</code> and friends, but <strong>no</strong> column for prompt or response content</li>
+  </ol>
+
+  <a href="/dashboard" class="btn-primary">Back to dashboard</a>
+</div>
+{% endblock %}

@@ -11,6 +11,7 @@ from datetime import date
 
 import resend
 
+from tourniquet.billing.formatting import format_money
 from tourniquet.config import settings
 
 
@@ -21,35 +22,48 @@ def _already_alerted_today(api_key_id: uuid.UUID, threshold_pct: int, today: dat
     return False
 
 
-async def maybe_send_alert(
-    *,
-    api_key_id: uuid.UUID,
-    api_key_name: str,
-    recipient_email: str,
-    spent_pence: int,
-    cap_pence: int,
-    threshold_pct: int,
-    today: date,
-) -> None:
-    """Send an alert email if the threshold is crossed and we haven't sent one today."""
+async def send_email(message: str, event: object) -> None:
+    """Send an alert email via Resend.
+
+    Conforms to the unified channel interface: (message, event) -> None.
+    No-op if RESEND_API_KEY is not set.
+    The event must have attributes: api_key_name, threshold_pct, spent_usd_cents,
+    cap_usd_cents, display_currency.
+    """
+    from tourniquet.alerts.notifier import AlertEvent
+
+    if not isinstance(event, AlertEvent):
+        return
     if not settings.resend_api_key:
         return
-    if _already_alerted_today(api_key_id, threshold_pct, today):
+    if _already_alerted_today(uuid.uuid4(), event.threshold_pct, event.today):
         return
 
-    pct_used = int(spent_pence / cap_pence * 100) if cap_pence else 0
-    spent_pounds = spent_pence / 100
-    cap_pounds = cap_pence / 100
+    currency = event.display_currency
+    spent_display = format_money(event.spent_usd_cents, currency)
+    cap_display = format_money(event.cap_usd_cents, currency)
+
+    if event.threshold_pct == -1:
+        subject = f"Tourniquet alert: {event.api_key_name} cap reached"
+    else:
+        subject = (
+            f"Tourniquet alert: {event.api_key_name} at {event.threshold_pct}% of daily cap"
+        )
+
+    pct_used = (
+        int(event.spent_usd_cents / event.cap_usd_cents * 100) if event.cap_usd_cents else 0
+    )
 
     resend.api_key = settings.resend_api_key
     resend.Emails.send({
         "from": settings.resend_from_email,
-        "to": [recipient_email],
-        "subject": f"Tourniquet alert: {api_key_name} at {pct_used}% of daily cap",
+        "to": [settings.resend_from_email],  # placeholder — real recipient wired in W1
+        "subject": subject,
         "html": (
-            f"<p>Your API key <strong>{api_key_name}</strong> has used "
-            f"<strong>£{spent_pounds:.2f}</strong> of your £{cap_pounds:.2f} daily cap "
+            f"<p>Your API key <strong>{event.api_key_name}</strong> has used "
+            f"<strong>{spent_display}</strong> of your {cap_display} daily cap "
             f"({pct_used}%).</p>"
+            f"<p>{message}</p>"
             f"<p><a href='{settings.app_base_url}/dashboard'>View dashboard</a></p>"
         ),
     })

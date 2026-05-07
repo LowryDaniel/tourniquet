@@ -1,0 +1,33 @@
+{
+  "version": "0.1.0",
+  "description": "Anthropic API proxy with hard daily spend caps — local-first",
+  "homepage": "https://tourniquet.dev",
+  "license": "MIT",
+
+  "depends": "python",
+
+  "url": "https://files.pythonhosted.org/packages/source/t/tourniquet-dev/tourniquet_dev-0.1.0.tar.gz",
+  "hash": "sha256:fa2a48f5addd6540ce7a54d3929769fee8e2231b3b44cd5b30cc4c7e74cfeaef",
+  "extract_dir": "tourniquet_dev-0.1.0",
+
+  "installer": {
+    "script": [
+      "$python = (Get-Command python.exe -ErrorAction SilentlyContinue).Source",
+      "if (-not $python) { Write-Error 'Python not found. Install python first: scoop install python' }",
+      "& $python -m pip install --user .",
+      "Write-Host 'Tourniquet installed. Run: tourniquet'"
+    ]
+  },
+
+  "uninstaller": {
+    "script": [
+      "$python = (Get-Command python.exe -ErrorAction SilentlyContinue).Source",
+      "if ($python) { & $python -m pip uninstall -y tourniquet }"
+    ]
+  },
+
+  "checkver": "github",
+  "autoupdate": {
+    "url": "https://files.pythonhosted.org/packages/source/t/tourniquet/tourniquet-$version.tar.gz"
+  }
+}

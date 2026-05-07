@@ -1,0 +1,22 @@
+PackageIdentifier: LowryDaniel.Tourniquet
+PackageVersion: 0.1.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: tourniquet-0.1.0\tourniquet.exe
+    PortableCommandAlias: tourniquet
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/LowryDaniel/tourniquet/releases/download/v0.1.0/tourniquet-0.1.0-win-x64.zip
+    InstallerSha256: REPLACE_WITH_SHA256_AFTER_RELEASE
+ManifestType: installer
+ManifestVersion: 1.6.0
+
+# To publish:
+#   1. Build a Windows binary using PyInstaller:  pyinstaller --onefile -n tourniquet src/tourniquet/cli.py
+#   2. Zip it:  Compress-Archive -Path dist\tourniquet.exe -DestinationPath tourniquet-0.1.0-win-x64.zip
+#   3. SHA256:  Get-FileHash tourniquet-0.1.0-win-x64.zip -Algorithm SHA256
+#   4. Upload to a GitHub Release at github.com/LowryDaniel/tourniquet/releases/v0.1.0
+#   5. Replace REPLACE_WITH_SHA256_AFTER_RELEASE above
+#   6. Submit a PR to microsoft/winget-pkgs adding this manifest
+#      (and a matching defaultLocale + version manifest — see https://docs.microsoft.com/winget/package/manifest)

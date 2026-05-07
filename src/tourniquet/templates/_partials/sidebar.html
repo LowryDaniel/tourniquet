@@ -1,0 +1,20 @@
+<div class="sidebar-title">KEYS</div>
+<nav class="key-list">
+  {% for k in keys %}
+  <a href="/dashboard/key/{{ k.id }}"
+     class="key-item {% if k.id == selected_id %}active{% endif %} {% if k.pct >= 100 %}state-hit{% elif k.pct >= 80 %}state-warn{% endif %}"
+     hx-get="/dashboard/key/{{ k.id }}"
+     hx-target="#main-panel"
+     hx-swap="innerHTML"
+     hx-push-url="/dashboard/key/{{ k.id }}">
+    <span class="key-dot {% if k.pct >= 100 %}dot-hit{% elif k.pct >= 80 %}dot-warn{% else %}dot-ok{% endif %}">●</span>
+    <span class="key-item-name">{{ k.name }}</span>
+    <span class="key-item-pct">{{ k.pct }}%</span>
+  </a>
+  {% else %}
+  <p class="sidebar-empty">No keys.</p>
+  {% endfor %}
+</nav>
+<div class="sidebar-footer">
+  <a href="/dashboard/keys/new" class="btn-new-key">+ New key</a>
+</div>

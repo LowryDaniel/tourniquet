@@ -1,0 +1,34 @@
+<div class="spend-now-bar"
+     id="spend-now-{{ key_id }}"
+     hx-get="/dashboard/key/{{ key_id }}/spend-now"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+  <div class="spend-now-header">
+    <span class="spend-now-label">
+      Today: <strong>{{ key.spent_display }}</strong> of
+      <strong>{{ key.effective_cap_display }}</strong>
+    </span>
+    <span class="spend-now-pct {% if key.pct >= 100 %}pct-hit{% elif key.pct >= 80 %}pct-warn{% endif %}">
+      {{ key.pct }}%
+    </span>
+  </div>
+  <div class="spend-bar-track">
+    <div class="spend-bar-fill {% if key.pct >= 100 %}fill-hit{% elif key.pct >= 80 %}fill-warn{% endif %}"
+         style="width: {{ key.pct }}%"></div>
+  </div>
+  {% if key.lift_active %}
+  <div class="lift-status">
+    Lifted to {{ key.effective_cap_display }}
+    {% if key.lift_expires_at %}until {{ key.lift_expires_at.strftime('%H:%M UTC') }}{% endif %}
+    —
+    <form style="display:inline"
+          hx-post="/dashboard/key/{{ key_id }}/unlift"
+          hx-target="#control-panel"
+          hx-swap="outerHTML">
+      <button type="submit" class="btn-inline-link">Unlift</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="lift-status lift-none">Lift status: NONE</div>
+  {% endif %}
+</div>

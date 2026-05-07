@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#0d0d0d"/>
+  <!-- Padlock body -->
+  <rect x="8" y="16" width="16" height="12" rx="3" fill="#8eff8e"/>
+  <!-- Padlock shackle -->
+  <path d="M11 16 v-5 a5 5 0 0 1 10 0 v5" fill="none" stroke="#8eff8e" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Keyhole -->
+  <circle cx="16" cy="21" r="2" fill="#0d0d0d"/>
+  <rect x="15" y="22" width="2" height="3" rx="1" fill="#0d0d0d"/>
+</svg>

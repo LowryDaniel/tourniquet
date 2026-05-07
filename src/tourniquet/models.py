@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models.
 
-All costs stored in pence (integer). Never pounds, never dollars.
+All costs stored in USD cents (integer). Canonical currency is USD.
+Display formatting is handled by tourniquet.billing.formatting.format_money().
 See docs/architecture.md for the full schema rationale.
 """
 
@@ -19,8 +20,42 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator, CHAR
+
+
+class _UUIDType(TypeDecorator):
+    """UUID column portable across Postgres and SQLite.
+
+    Stored as CHAR(36) string in SQLite, native UUID in Postgres.
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+            return dialect.type_descriptor(PG_UUID())
+        return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, uuid.UUID):
+            return value
+        return uuid.UUID(value)
+
+
+UUID = _UUIDType
+JSONB = JSON
 
 
 class Base(DeclarativeBase):
@@ -30,7 +65,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     magic_link_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -42,15 +77,21 @@ class User(Base):
 class ApiKey(Base):
     __tablename__ = "api_keys"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     tq_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     anthropic_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[str] = mapped_column(String(50), nullable=False, default="hobby")
-    daily_cap_pence: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
+    daily_cap_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
     kill_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    auto_tune_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="off")
+    # Values: "off" | "suggest" | "creep"
+    absolute_ceiling_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
+    # 10000 cents = $100/day default ceiling. Auto-tune creep can never exceed this.
+    lifted_cap_usd_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    lift_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship("User", back_populates="api_keys")
@@ -62,14 +103,16 @@ class ApiKey(Base):
 class UsageEvent(Base):
     __tablename__ = "usage_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
     request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    cost_pence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cap_hit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     api_key: Mapped[ApiKey] = relationship("ApiKey", back_populates="usage_events")
@@ -80,8 +123,8 @@ class Trigger(Base):
 
     __tablename__ = "triggers"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
     condition_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     actions_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -99,8 +142,8 @@ class CapToday(Base):
 
     __tablename__ = "caps_today"
 
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="CASCADE"), primary_key=True)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), primary_key=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, primary_key=True)
-    total_pence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     api_key: Mapped[ApiKey] = relationship("ApiKey", back_populates="cap_today")

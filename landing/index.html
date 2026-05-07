@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Tourniquet — Stop runaway Claude API spend</title>
+  <meta name="description" content="A free, local-first proxy that hard-caps your Anthropic API at a daily limit you set. When the cap hits, it kills the stream — your agent stops, your bill doesn't grow.">
+  <link rel="canonical" href="https://tourniquet.dev/">
+  <meta name="theme-color" content="#0d0d0d">
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://tourniquet.dev/">
+  <meta property="og:title" content="Tourniquet — Stop runaway Claude API spend">
+  <meta property="og:description" content="A free, local-first proxy that hard-caps your Anthropic API at a daily limit you set. Sits on your laptop. No cloud. No SaaS. Just stops the bleed.">
+  <meta property="og:image" content="https://tourniquet.dev/og-image.svg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tourniquet — Stop runaway Claude API spend">
+  <meta name="twitter:description" content="Hard-cap your Anthropic API in 60 seconds. Free, local, no cloud required.">
+  <meta name="twitter:image" content="https://tourniquet.dev/og-image.svg">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav aria-label="Main navigation">
+  <div class="container">
+    <span class="nav-logo">tourniquet<span>.</span>dev</span>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#trust">Trust</a></li>
+      <li><a href="https://github.com/LowryDaniel/tourniquet">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-badge">Free &amp; open source</div>
+    <h1>Stop runaway Claude API spend<br><em>in 60 seconds</em></h1>
+    <p class="hero-sub">
+      Tourniquet is a free, local-first proxy that hard-caps your Anthropic API at a daily limit you set.
+      When the cap hits, it kills the stream mid-response — your agent stops, your bill doesn't grow.
+    </p>
+    <div class="cta-row">
+      <a href="#install" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Install
+      </a>
+      <a href="https://github.com/LowryDaniel/tourniquet" class="btn-ghost" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.185 6.839 9.504.5.092.682-.217.682-.482 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.025 10.025 0 0022 12.021C22 6.484 17.522 2 12 2z"/>
+        </svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <!-- Terminal demo -->
+    <div class="terminal-wrap" role="img" aria-label="Terminal showing a streaming Claude response being cut off when the daily cap is reached">
+      <div class="terminal-bar">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <span class="terminal-title">tourniquet — proxy running on :8989</span>
+      </div>
+      <div class="terminal-body">
+<span class="t-prompt">$ </span><span class="t-cmd">claude "refactor everything in /src for performance"</span>
+<span class="t-stream">Streaming response via Tourniquet proxy...</span>
+
+<span class="t-stream">I'll start by auditing each module. Beginning with</span>
+<span class="t-stream">src/core/engine.py — the main event loop looks like</span>
+<span class="t-stream-fade">it could benefit from async batching, and the inner</span>
+<span class="t-stream-fade">loop at line 847 is allocating a new dict on every—</span>
+
+<span class="t-killed">⚡  CAP HIT — $15.00/day limit reached</span>
+<span class="t-stop">   Stream terminated. No further tokens billed.</span>
+
+<span class="t-comment">   event: message_stop</span>
+<span class="t-comment">   data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}</span>
+<span class="cursor"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pain ── -->
+<section id="pain" aria-labelledby="pain-heading">
+  <div class="container">
+    <div class="section-label">Why this exists</div>
+    <h2 id="pain-heading">You've seen this story before</h2>
+    <div class="pain-grid">
+
+      <div class="pain-card highlight">
+        <p>
+          <strong>You set up an agent. It loops. You wake up to a $400 bill.</strong>
+          It's not hypothetical — documented incidents include a single LangChain agent
+          accumulating over $40,000 in a single run, and Cursor users hitting unexpected
+          charges after leaving overnight tasks unattended. The common thread: no hard stop.
+        </p>
+      </div>
+
+      <div class="pain-card">
+        <p>
+          Token spend can compound faster than intuition suggests. An agentic loop with tool
+          calls, retries, and long context windows can burn through a daily budget in under
+          ten minutes if something goes sideways. The Anthropic Console offers monthly soft
+          limits; they don't stop an in-flight request.
+        </p>
+      </div>
+
+      <div class="pain-card">
+        <p>
+          <strong>Existing options all have the same gap.</strong> Anthropic's own spend limits
+          are monthly and advisory. LiteLLM is team-grade infrastructure with a meaningful
+          ops surface. Helicone and similar SaaS proxies route your traffic through someone
+          else's cloud — and none of them inject a clean stop mid-stream. They drop the TCP
+          connection, which your agent sees as a generic network error, not a recoverable
+          budget signal.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ── -->
+<section id="how-it-works" aria-labelledby="how-heading">
+  <div class="container">
+    <div class="section-label">Setup</div>
+    <h2 id="how-heading">Three steps, then forget about it</h2>
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-icon" aria-hidden="true">1️⃣</div>
+        <div>
+          <h3>Install one command</h3>
+          <p>Tourniquet is a Python package with no system dependencies beyond Python 3.9+.</p>
+          <code>pip install tourniquet-dev</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" aria-hidden="true">2️⃣</div>
+        <div>
+          <h3>Run it</h3>
+          <p>
+            A single command starts the proxy and opens your browser at the local dashboard.
+            No config files to edit, no environment to learn.
+          </p>
+          <code>tourniquet</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-icon" aria-hidden="true">3️⃣</div>
+        <div>
+          <h3>Paste your key, set a cap</h3>
+          <p>
+            Enter your <code>sk-ant-</code> key in the dashboard, choose a daily dollar limit,
+            and point your agent at <code>http://localhost:8989</code>.
+            Done. Your key never leaves your machine.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Install box ── -->
+<section id="install" aria-labelledby="install-heading">
+  <div class="container">
+    <div class="section-label">Install</div>
+    <h2 id="install-heading">Get started now</h2>
+
+    <div class="install-tabs" role="tablist" aria-label="Operating system">
+      <button class="tab-btn active" role="tab" data-os="mac"     aria-selected="true">macOS</button>
+      <button class="tab-btn"        role="tab" data-os="linux"   aria-selected="false">Linux</button>
+      <button class="tab-btn"        role="tab" data-os="windows" aria-selected="false">Windows</button>
+    </div>
+
+    <!-- macOS -->
+    <div class="os-panel" data-os="mac">
+      <div class="install-block" id="install-block" data-os="mac">
+        <div class="install-header">
+          <span class="install-label">Terminal</span>
+          <button class="copy-btn" data-copy-target="cmd-mac">Copy</button>
+        </div>
+        <div class="install-code" id="cmd-mac">pip install tourniquet-dev &amp;&amp; tourniquet</div>
+      </div>
+    </div>
+
+    <!-- Linux -->
+    <div class="os-panel" data-os="linux" hidden>
+      <div class="install-block">
+        <div class="install-header">
+          <span class="install-label">Terminal</span>
+          <button class="copy-btn" data-copy-target="cmd-linux">Copy</button>
+        </div>
+        <div class="install-code" id="cmd-linux">pip install tourniquet-dev &amp;&amp; tourniquet</div>
+      </div>
+    </div>
+
+    <!-- Windows -->
+    <div class="os-panel" data-os="windows" hidden>
+      <div class="install-block">
+        <div class="install-header">
+          <span class="install-label">PowerShell</span>
+          <button class="copy-btn" data-copy-target="cmd-windows">Copy</button>
+        </div>
+        <div class="install-code" id="cmd-windows">pip install tourniquet-dev; tourniquet</div>
+      </div>
+    </div>
+
+    <!-- Mobile notice (shown by JS when mobile) -->
+    <div id="mobile-note" hidden>
+      <p style="color:var(--fg-muted);margin-bottom:1rem;font-size:0.9rem;">Install on a desktop or laptop — tourniquet runs as a local proxy.</p>
+    </div>
+
+    <!-- Alternate install options -->
+    <div class="install-alts">
+
+      <div class="install-alt">
+        <div class="install-alt-label">Homebrew</div>
+        <p class="soon">Coming soon: <code style="font-family:var(--font-mono);font-size:0.82rem;color:var(--fg-muted)">brew install tourniquet</code></p>
+      </div>
+
+      <div class="install-alt">
+        <div class="install-alt-label">From source</div>
+        <pre>git clone https://github.com/LowryDaniel/tourniquet
+cd tourniquet
+pip install -e ".[dev]"
+tourniquet</pre>
+      </div>
+
+      <div class="install-alt">
+        <div class="install-alt-label">Upgrade</div>
+        <pre>pip install --upgrade tourniquet</pre>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Trust ── -->
+<section id="trust" aria-labelledby="trust-heading">
+  <div class="container">
+    <div class="trust-card">
+      <div class="section-label">Data residency</div>
+      <h2 id="trust-heading">Your data stays on your laptop</h2>
+      <ul class="trust-list">
+        <li>Your Anthropic API key is stored encrypted at rest using Fernet (AES-256-CBC + HMAC-SHA256).</li>
+        <li>Dashboard access tokens use the <code>tq_</code> prefix and are bcrypt-hashed — the plaintext is shown once, then discarded.</li>
+        <li>No telemetry, no analytics, no phone-home. The process makes exactly one category of outbound request: your API calls to Anthropic.</li>
+        <li>Anthropic still receives the same proxied requests it would see from any Claude SDK client — Tourniquet is transparent to the API.</li>
+        <li>The database is a local SQLite file at <code>~/.tourniquet/tourniquet.db</code>. You own it.</li>
+      </ul>
+      <a class="trust-link" href="https://github.com/LowryDaniel/tourniquet/blob/main/SECURITY.md">Read the full security policy →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Kill mechanism ── -->
+<section id="how-it-stops" aria-labelledby="kill-heading">
+  <div class="container">
+    <div class="section-label">Technical detail</div>
+    <h2 id="kill-heading">The cleanest stop in the category</h2>
+    <p style="color:var(--fg-muted);margin-bottom:1.25rem;">
+      When your daily cap is reached mid-stream, Tourniquet doesn't drop the TCP connection.
+      It injects a synthetic SSE <code>message_stop</code> event at the end of the current
+      partial chunk, then cleanly closes the response:
+    </p>
+
+    <div class="sse-block" role="figure" aria-label="Synthetic SSE stop event injected by Tourniquet">
+<span class="sse-event">event: </span><span class="sse-val">message_stop</span>
+<span class="sse-event">data: </span><span class="t-comment">{</span><span class="sse-key">"type"</span><span class="t-comment">:</span><span class="sse-val">"message_stop"</span><span class="t-comment">,</span><span class="sse-key">"stop_reason"</span><span class="t-comment">:</span><span class="sse-stop">"tourniquet_cap_hit"</span><span class="t-comment">}</span>
+    </div>
+
+    <p style="color:var(--fg-muted);margin-bottom:1.5rem;">
+      This matters because the <code>stop_reason</code> field is surfaced to your agent code.
+      A well-written agent can catch <code>tourniquet_cap_hit</code>, log the event, and exit
+      gracefully — rather than crashing with an unhandled network exception.
+    </p>
+
+    <div class="kill-compare">
+      <div class="kill-col bad">
+        <h4>SaaS proxy approach</h4>
+        <p>Drop the TCP connection at the cap. The SDK raises a connection error. Your agent sees an unhandled exception — or retries and burns more tokens.</p>
+      </div>
+      <div class="kill-col good">
+        <h4>Tourniquet approach</h4>
+        <p>Inject a clean <code>message_stop</code> SSE event with a machine-readable <code>stop_reason</code>. The SDK calls your normal completion callback. You can handle it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <p class="footer-copy">
+        &copy; 2025 Tourniquet contributors. Released under the
+        <a href="https://github.com/LowryDaniel/tourniquet/blob/main/LICENSE" style="color:var(--fg-muted)">MIT licence</a>.
+      </p>
+      <ul class="footer-links">
+        <li><a href="https://github.com/LowryDaniel/tourniquet">GitHub</a></li>
+        <li><a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/install.md">Docs</a></li>
+        <li><a href="https://github.com/LowryDaniel/tourniquet/blob/main/SECURITY.md">Security</a></li>
+        <li><a href="https://github.com/LowryDaniel/tourniquet/blob/main/CONTRIBUTING.md">Contributing</a></li>
+      </ul>
+    </div>
+    <p class="footer-tagline">Local-first. Free forever.</p>
+  </div>
+</footer>
+
+<script src="install.js"></script>
+</body>
+</html>

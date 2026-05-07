@@ -1,41 +1,35 @@
-"""Pricing calculations — pence integer, no float drift."""
+"""Pricing calculations — USD cents integer, no float drift."""
 
-from tourniquet.billing.pricing import cost_pence
-
-
-def test_cost_pence_zero_tokens():
-    assert cost_pence("claude-sonnet-4-6", 0, 0) == 0
+from tourniquet.billing.pricing import cost_usd_cents
 
 
-def test_cost_pence_known_model():
-    # Sonnet 4.6: 237p/1M input, 1185p/1M output
-    # 1M input + 0 output = 237p, rounded up
-    assert cost_pence("claude-sonnet-4-6", 1_000_000, 0) == 237
-    # 0 input + 1M output = 1185p
-    assert cost_pence("claude-sonnet-4-6", 0, 1_000_000) == 1185
+def test_zero_tokens():
+    assert cost_usd_cents("claude-sonnet-4-6", 0, 0) == 0
 
 
-def test_cost_pence_unknown_model_falls_back():
+def test_sonnet_1m_input():
+    # Sonnet 4.6: $3/1M input = 300 cents
+    assert cost_usd_cents("claude-sonnet-4-6", 1_000_000, 0) == 300
+
+
+def test_sonnet_1m_output():
+    # Sonnet 4.6: $15/1M output = 1500 cents
+    assert cost_usd_cents("claude-sonnet-4-6", 0, 1_000_000) == 1500
+
+
+def test_unknown_model_falls_back_to_sonnet():
     # Unknown model uses Sonnet rates
-    assert cost_pence("future-claude-9000", 1_000_000, 0) == 237
+    assert cost_usd_cents("future-claude-9000", 1_000_000, 0) == 300
 
 
-def test_cost_pence_rounds_up():
-    # Tiny request: 1 input + 1 output ≈ 0.000001422 pence → rounds up to 1
-    result = cost_pence("claude-sonnet-4-6", 1, 1)
+def test_rounds_up():
+    # Tiny request: 1 input + 1 output — well below 1 cent, rounds up to 1
+    result = cost_usd_cents("claude-sonnet-4-6", 1, 1)
     assert result >= 1
     assert isinstance(result, int)
 
 
-def test_cost_pence_realistic_request():
-    # 500 input + 200 output on Sonnet
-    # = (500 * 237 + 200 * 1185) / 1M = (118_500 + 237_000) / 1M = 0.355p
-    # Rounds up to 1p
-    cost = cost_pence("claude-sonnet-4-6", 500, 200)
-    assert cost == 1
-
-
-def test_cost_pence_opus_more_expensive():
-    sonnet = cost_pence("claude-sonnet-4-6", 1_000_000, 1_000_000)
-    opus = cost_pence("claude-opus-4-7", 1_000_000, 1_000_000)
+def test_opus_more_expensive_than_sonnet():
+    sonnet = cost_usd_cents("claude-sonnet-4-6", 1_000_000, 1_000_000)
+    opus = cost_usd_cents("claude-opus-4-7", 1_000_000, 1_000_000)
     assert opus > sonnet

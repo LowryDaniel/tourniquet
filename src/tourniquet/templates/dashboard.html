@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Tourniquet{% endblock %}
+{% block content %}
+<div class="dash-layout">
+
+  {# ── Sidebar ── #}
+  <aside class="sidebar" id="sidebar">
+    {% include "_partials/sidebar.html" %}
+  </aside>
+
+  {# ── Main panel ── #}
+  <section class="main-panel" id="main-panel">
+    {% if selected_id %}
+      {% include "_partials/key_panel.html" %}
+    {% else %}
+      <div class="empty-state">
+        <p>No keys yet. <a href="/dashboard/keys/new">Add your first key</a>.</p>
+      </div>
+    {% endif %}
+  </section>
+
+</div>
+
+<footer class="dash-footer">
+  🔒 All data on this {{ device_label(request) }} · No telemetry · No cloud sync · <a href="/trust">See exactly what stays local</a>
+</footer>
+{% endblock %}

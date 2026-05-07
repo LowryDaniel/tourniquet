@@ -1,0 +1,28 @@
+{% if suggestion %}
+<div class="suggestion-card">
+  <h3 class="section-heading">Suggestion</h3>
+  <p class="suggestion-text">
+    P95: <strong>{{ suggestion.p95_usd_cents | format_money_filter }}</strong>.
+    Suggested cap: <strong>{{ suggestion.suggested_cap_usd_cents | format_money_filter }}</strong>.
+    <em>{{ suggestion.rationale }}</em>
+  </p>
+  <p class="suggestion-meta">
+    Avg daily: {{ suggestion.avg_daily_usd_cents | format_money_filter }} &nbsp;|&nbsp;
+    P50: {{ suggestion.p50_usd_cents | format_money_filter }} &nbsp;|&nbsp;
+    Max: {{ suggestion.max_usd_cents | format_money_filter }}
+    {% if suggestion.capped_by_ceiling %}
+      <span class="badge-warn"> — clamped to ceiling</span>
+    {% endif %}
+  </p>
+  <form hx-post="/dashboard/key/{{ key_id }}/apply-suggestion"
+        hx-target="#control-panel"
+        hx-swap="outerHTML">
+    <button type="submit" class="btn-primary btn-small">Apply</button>
+  </form>
+</div>
+{% else %}
+<div class="suggestion-card suggestion-none">
+  <h3 class="section-heading">Suggestion</h3>
+  <p class="empty">Need at least 3 active days of history to generate a suggestion.</p>
+</div>
+{% endif %}

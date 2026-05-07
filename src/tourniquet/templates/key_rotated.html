@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}{% if is_new %}Key Created{% else %}Token Rotated{% endif %} — Tourniquet{% endblock %}
+{% block content %}
+{% set proxy_url = request.url.scheme ~ "://" ~ request.url.netloc %}
+{% set ds = default_shell | default("bash") %}
+<div class="form-page key-created-page">
+  {% if is_new %}
+  <h1>Key created: {{ key_name }}</h1>
+  {% else %}
+  <h1>Token rotated: {{ key_name }}</h1>
+  {% endif %}
+
+  <div class="token-warning">
+    <p class="warn">⚠️ This token is shown <strong>once only</strong>. Copy it now — it cannot be recovered.</p>
+    <div class="token-box">
+      <code id="token-val">{{ token }}</code>
+      <button onclick="copyText('token-val', this)" class="btn-small">Copy</button>
+    </div>
+    <p class="muted-hint" style="margin-top:.75rem">🔒 Only the bcrypt hash of this token is stored in the local SQLite DB. Even Tourniquet can't recover the plaintext — that's why we show it once.</p>
+  </div>
+
+  <h2 class="next-steps-heading">Use it now — pick your tool</h2>
+  <p class="muted-hint">Each block below already has your token + the Tourniquet URL filled in. Click <em>Copy</em>, paste, and you're routing through Tourniquet.</p>
+
+  <!-- Shell env vars -->
+  <details {% if ds == "bash" %}open{% endif %} class="snippet">
+    <summary>Shell — bash / zsh</summary>
+    <div class="snippet-body">
+      <pre id="snip-shell-bash">export ANTHROPIC_BASE_URL={{ proxy_url }}
+export ANTHROPIC_API_KEY={{ token }}</pre>
+      <button onclick="copyText('snip-shell-bash', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">Add these two lines to <code>~/.zshrc</code> or <code>~/.bashrc</code> to make them persist, or paste before launching an agent.</p>
+    </div>
+  </details>
+
+  <details {% if ds == "powershell" %}open{% endif %} class="snippet">
+    <summary>Shell — PowerShell</summary>
+    <div class="snippet-body">
+      <pre id="snip-shell-ps">$env:ANTHROPIC_BASE_URL = "{{ proxy_url }}"
+$env:ANTHROPIC_API_KEY  = "{{ token }}"</pre>
+      <button onclick="copyText('snip-shell-ps', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">To persist across sessions, add to your <code>$PROFILE</code> file.</p>
+    </div>
+  </details>
+
+  <details class="snippet">
+    <summary>Shell — cmd.exe</summary>
+    <div class="snippet-body">
+      <pre id="snip-shell-cmd">set ANTHROPIC_BASE_URL={{ proxy_url }}
+set ANTHROPIC_API_KEY={{ token }}</pre>
+      <button onclick="copyText('snip-shell-cmd', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">Use <code>setx</code> instead of <code>set</code> to persist to user environment permanently.</p>
+    </div>
+  </details>
+
+  <!-- curl smoke test -->
+  <details {% if ds == "bash" %}open{% endif %} class="snippet">
+    <summary>Quick smoke test (curl bash/zsh, ~1 cent)</summary>
+    <div class="snippet-body">
+      <pre id="snip-curl-bash">curl -s -N -X POST {{ proxy_url }}/v1/messages \
+  -H "authorization: Bearer {{ token }}" \
+  -H "content-type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":50,"messages":[{"role":"user","content":"say hi in 5 words"}]}'</pre>
+      <button onclick="copyText('snip-curl-bash', this)" class="btn-small">Copy</button>
+    </div>
+  </details>
+
+  <details {% if ds == "powershell" %}open{% endif %} class="snippet">
+    <summary>Quick smoke test (curl PowerShell, ~1 cent)</summary>
+    <div class="snippet-body">
+      <pre id="snip-curl-ps">curl.exe -s -X POST {{ proxy_url }}/v1/messages `
+  -H "authorization: Bearer {{ token }}" `
+  -H "content-type: application/json" `
+  -H "anthropic-version: 2023-06-01" `
+  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":50,"messages":[{"role":"user","content":"say hi in 5 words"}]}'</pre>
+      <button onclick="copyText('snip-curl-ps', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">curl.exe ships with Windows 10+. Use backtick (<code>`</code>) for line continuation in PowerShell.</p>
+    </div>
+  </details>
+
+  <!-- Python SDK -->
+  <details class="snippet">
+    <summary>Python SDK (anthropic)</summary>
+    <div class="snippet-body">
+      <pre id="snip-py">import anthropic
+
+client = anthropic.Anthropic(
+    api_key="{{ token }}",
+    base_url="{{ proxy_url }}",
+)
+
+resp = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "hi"}],
+)
+print(resp.content[0].text)</pre>
+      <button onclick="copyText('snip-py', this)" class="btn-small">Copy</button>
+    </div>
+  </details>
+
+  <!-- Node SDK -->
+  <details class="snippet">
+    <summary>Node / TypeScript SDK (@anthropic-ai/sdk)</summary>
+    <div class="snippet-body">
+      <pre id="snip-node">import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  apiKey: "{{ token }}",
+  baseURL: "{{ proxy_url }}",
+});
+
+const resp = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 100,
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(resp.content[0].text);</pre>
+      <button onclick="copyText('snip-node', this)" class="btn-small">Copy</button>
+    </div>
+  </details>
+
+  <!-- Claude Code -->
+  <details {% if ds == "bash" %}open{% endif %} class="snippet">
+    <summary>Claude Code CLI — bash/zsh</summary>
+    <div class="snippet-body">
+      <pre id="snip-cc-bash">export ANTHROPIC_BASE_URL={{ proxy_url }}
+export ANTHROPIC_API_KEY={{ token }}
+claude</pre>
+      <button onclick="copyText('snip-cc-bash', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">Any <code>claude</code> session in this shell now routes through Tourniquet. <strong>Heads-up:</strong> switches Claude Code from subscription to API metered billing. The cap protects you from runaway, but usage still costs money. <code>unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY</code> to revert.</p>
+    </div>
+  </details>
+
+  <details {% if ds == "powershell" %}open{% endif %} class="snippet">
+    <summary>Claude Code CLI — PowerShell</summary>
+    <div class="snippet-body">
+      <pre id="snip-cc-ps">$env:ANTHROPIC_BASE_URL = "{{ proxy_url }}"
+$env:ANTHROPIC_API_KEY  = "{{ token }}"
+claude</pre>
+      <button onclick="copyText('snip-cc-ps', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">To revert: <code>Remove-Item Env:ANTHROPIC_BASE_URL, Env:ANTHROPIC_API_KEY</code></p>
+    </div>
+  </details>
+
+  <details class="snippet">
+    <summary>Claude Code CLI — cmd.exe</summary>
+    <div class="snippet-body">
+      <pre id="snip-cc-cmd">set ANTHROPIC_BASE_URL={{ proxy_url }}
+set ANTHROPIC_API_KEY={{ token }}
+claude</pre>
+      <button onclick="copyText('snip-cc-cmd', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">To revert: <code>set ANTHROPIC_BASE_URL=</code> and <code>set ANTHROPIC_API_KEY=</code> (empty assignment unsets).</p>
+    </div>
+  </details>
+
+  <!-- OJW Swarm -->
+  <details {% if ds == "bash" %}open{% endif %} class="snippet">
+    <summary>OJW Swarm (or any agent script) — bash/zsh</summary>
+    <div class="snippet-body">
+      <pre id="snip-ojw-bash">export ANTHROPIC_BASE_URL={{ proxy_url }}
+export ANTHROPIC_API_KEY={{ token }}</pre>
+      <button onclick="copyText('snip-ojw-bash', this)" class="btn-small">Copy</button>
+      <p class="muted-hint" style="margin-top:.5rem">Paste at the top of your launcher script, or add to the env block of your systemd / launchd unit.</p>
+    </div>
+  </details>
+
+  <details {% if ds == "powershell" %}open{% endif %} class="snippet">
+    <summary>OJW Swarm (or any agent script) — PowerShell</summary>
+    <div class="snippet-body">
+      <pre id="snip-ojw-ps">$env:ANTHROPIC_BASE_URL = "{{ proxy_url }}"
+$env:ANTHROPIC_API_KEY  = "{{ token }}"</pre>
+      <button onclick="copyText('snip-ojw-ps', this)" class="btn-small">Copy</button>
+    </div>
+  </details>
+
+  <details class="snippet">
+    <summary>OJW Swarm (or any agent script) — cmd.exe</summary>
+    <div class="snippet-body">
+      <pre id="snip-ojw-cmd">set ANTHROPIC_BASE_URL={{ proxy_url }}
+set ANTHROPIC_API_KEY={{ token }}</pre>
+      <button onclick="copyText('snip-ojw-cmd', this)" class="btn-small">Copy</button>
+    </div>
+  </details>
+
+  <!-- Safety net -->
+  <div class="muted-hint" style="margin-top:1.5rem">
+    <strong>Safety net:</strong> if Tourniquet ever crashes or you need to escape, unset the env vars and your agents fall back to direct Anthropic.<br>
+    bash/zsh: <code>unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY</code><br>
+    PowerShell: <code>Remove-Item Env:ANTHROPIC_BASE_URL, Env:ANTHROPIC_API_KEY</code><br>
+    cmd.exe: <code>set ANTHROPIC_BASE_URL=</code> &amp; <code>set ANTHROPIC_API_KEY=</code>
+  </div>
+
+  {% if is_new %}
+  <!-- ── Smart-suggestions onboarding (only on first creation) ─────────────── -->
+  <div class="intel-section" id="intel-section">
+    <h2 class="next-steps-heading">🔮 Smart suggestions</h2>
+    <p class="muted-hint">Want a cap recommendation based on your actual usage? Three options:</p>
+
+    <div class="intel-options">
+      <button type="button" class="btn-intel"
+              onclick="showIntelPanel('admin')">📊 I have an admin key — pull my last 14 days</button>
+      <button type="button" class="btn-intel"
+              onclick="showIntelPanel('how')">❓ Show me how to get an admin key</button>
+      <form style="display:inline" hx-post="/dashboard/key/{{ key_id }}/intel-monitor"
+            hx-target="#intel-section" hx-swap="outerHTML">
+        <button type="submit" class="btn-intel">⏱ Just monitor my usage and suggest later</button>
+      </form>
+    </div>
+
+    <!-- Branch A: admin-key fetch -->
+    <div id="intel-panel-admin" class="intel-panel" style="display:none">
+      <p class="muted-hint">
+        <strong>🔒 Used once, never stored.</strong> Tourniquet will hit Anthropic's Admin API,
+        compute p95 of your last 14 days, then forget the admin key. Nothing is written to disk.
+        <a href="/trust">Why this is safe</a>
+      </p>
+      <form hx-post="/dashboard/key/{{ key_id }}/intel-fetch"
+            hx-target="#intel-section" hx-swap="outerHTML"
+            class="intel-form">
+        <input type="password" name="admin_key" required
+               placeholder="sk-ant-admin-..." autocomplete="off"
+               class="intel-admin-input">
+        <button type="submit" class="btn-primary">Pull history &amp; suggest</button>
+      </form>
+    </div>
+
+    <!-- Branch B: how-to instructions -->
+    <div id="intel-panel-how" class="intel-panel" style="display:none">
+      <p>An <strong>admin key</strong> lets Tourniquet read your past usage from Anthropic. It's separate from your <code>sk-ant-...</code> request key.</p>
+      <ol>
+        <li>Open <a href="https://console.anthropic.com/settings/admin-keys" target="_blank" rel="noopener">console.anthropic.com → Settings → Admin Keys</a></li>
+        <li>Click <strong>Create Key</strong>, name it <em>tourniquet-onboarding</em></li>
+        <li>Copy the <code>sk-ant-admin-...</code> value (shown once)</li>
+        <li>Paste it above — Tourniquet uses it once, then drops it from memory</li>
+        <li>You can <strong>delete the admin key from your console immediately after</strong> — Tourniquet won't need it again</li>
+      </ol>
+      <p class="muted-hint">If your org doesn't have admin permissions, skip this and use the third option (monitor over time).</p>
+      <button type="button" class="btn-small" onclick="showIntelPanel('admin')">↑ I have one now — paste it</button>
+    </div>
+  </div>
+
+  <script>
+    function showIntelPanel(which) {
+      document.getElementById('intel-panel-admin').style.display = (which === 'admin') ? 'block' : 'none';
+      document.getElementById('intel-panel-how').style.display = (which === 'how') ? 'block' : 'none';
+    }
+  </script>
+  {% endif %}
+
+  <a href="/dashboard/key/{{ key_id }}" class="btn-primary" style="margin-top:1.5rem">Go to dashboard</a>
+</div>
+
+<script>
+function copyText(elId, btn) {
+  const text = document.getElementById(elId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+</script>
+{% endblock %}

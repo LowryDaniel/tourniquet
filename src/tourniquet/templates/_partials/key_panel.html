@@ -1,0 +1,23 @@
+<div class="key-panel" id="key-panel-{{ key_id }}">
+
+  <div class="key-panel-header">
+    <h2 class="key-panel-name">{{ key.name }}</h2>
+    <span class="badge">{{ key.profile }}</span>
+  </div>
+
+  {# Live spend bar — polls every 5s #}
+  {% include "_partials/spend_now.html" %}
+
+  {# Charts — polls every 30s #}
+  {% include "_partials/charts.html" %}
+
+  {# Suggestion #}
+  {% include "_partials/suggestion.html" %}
+
+  {# Controls #}
+  {% include "_partials/control_panel.html" %}
+
+  {# Alert log — polls every 30s #}
+  {% include "_partials/alerts_log.html" %}
+
+</div>

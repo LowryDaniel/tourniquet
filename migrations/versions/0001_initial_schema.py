@@ -38,9 +38,13 @@ def upgrade() -> None:
         sa.Column("tq_token_hash", sa.Text, nullable=False),
         sa.Column("anthropic_key_encrypted", sa.Text, nullable=False),
         sa.Column("profile", sa.String(50), nullable=False, server_default="hobby"),
-        sa.Column("daily_cap_pence", sa.Integer, nullable=False, server_default="500"),
+        sa.Column("daily_cap_usd_cents", sa.Integer, nullable=False, server_default="500"),
         sa.Column("kill_enabled", sa.Boolean, nullable=False, server_default="true"),
         sa.Column("alert_email", sa.String(255), nullable=True),
+        sa.Column("auto_tune_mode", sa.String(20), nullable=False, server_default="off"),
+        sa.Column("absolute_ceiling_usd_cents", sa.Integer, nullable=False, server_default="10000"),
+        sa.Column("lifted_cap_usd_cents", sa.Integer, nullable=True),
+        sa.Column("lift_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
     op.create_index("ix_api_keys_user_id", "api_keys", ["user_id"])
@@ -54,8 +58,10 @@ def upgrade() -> None:
         sa.Column("model", sa.String(100), nullable=False),
         sa.Column("input_tokens", sa.Integer, nullable=False, server_default="0"),
         sa.Column("output_tokens", sa.Integer, nullable=False, server_default="0"),
-        sa.Column("cost_pence", sa.Integer, nullable=False, server_default="0"),
+        sa.Column("cost_usd_cents", sa.Integer, nullable=False, server_default="0"),
         sa.Column("cap_hit", sa.Boolean, nullable=False, server_default="false"),
+        sa.Column("user_agent", sa.String(255), nullable=True),
+        sa.Column("metadata_user_id", sa.String(255), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
     op.create_index("ix_usage_events_api_key_id", "usage_events", ["api_key_id"])
@@ -76,7 +82,7 @@ def upgrade() -> None:
         "caps_today",
         sa.Column("api_key_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False),
         sa.Column("date", sa.Date, nullable=False),
-        sa.Column("total_pence", sa.Integer, nullable=False, server_default="0"),
+        sa.Column("total_usd_cents", sa.Integer, nullable=False, server_default="0"),
         sa.PrimaryKeyConstraint("api_key_id", "date"),
     )
     op.create_index("ix_caps_today_date", "caps_today", ["date"])

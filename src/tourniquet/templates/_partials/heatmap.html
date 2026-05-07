@@ -1,0 +1,19 @@
+{# heatmap: 7 rows (Mon–Sun) × 24 cols. intensity 0–5. #}
+<div class="heatmap-wrap">
+  <div class="heatmap-ylabels">
+    <span>Mon</span><span>Tue</span><span>Wed</span>
+    <span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+  </div>
+  <div class="heatmap-grid">
+    {% for row in heatmap %}
+      {% for cell in row %}
+        <div class="hm-cell hm-{{ cell }}" title="intensity {{ cell }}"></div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  <div class="heatmap-xlabels">
+    {% for h in range(0, 24, 3) %}
+      <span>{{ '%02d'|format(h) }}</span>
+    {% endfor %}
+  </div>
+</div>
