@@ -227,6 +227,126 @@ def cmd_handle_url(args: argparse.Namespace) -> None:
     sys.exit(rc)
 
 
+def cmd_test(args: argparse.Namespace) -> None:
+    """Send one small request through the proxy and pretty-print what happened.
+
+    Reads tq_ token from --token or $ANTHROPIC_API_KEY. Reads proxy URL from
+    --base-url or $ANTHROPIC_BASE_URL or defaults to http://127.0.0.1:8787.
+    """
+    import json as _json
+
+    import httpx
+
+    is_tty = sys.stdout.isatty()
+    GREEN = "\033[32m" if is_tty else ""
+    RED = "\033[31m" if is_tty else ""
+    YELLOW = "\033[33m" if is_tty else ""
+    DIM = "\033[2m" if is_tty else ""
+    BOLD = "\033[1m" if is_tty else ""
+    RESET = "\033[0m" if is_tty else ""
+
+    token = args.token or os.environ.get("ANTHROPIC_API_KEY", "")
+    base_url = args.base_url or os.environ.get("ANTHROPIC_BASE_URL", "http://127.0.0.1:8787")
+    if not token.startswith("tq_"):
+        print(f"{RED}✗ No Tourniquet token found.{RESET}")
+        print(f"  Pass {BOLD}--token tq_...{RESET} or {BOLD}export ANTHROPIC_API_KEY=tq_...{RESET}")
+        sys.exit(1)
+
+    payload = {
+        "model": args.model,
+        "max_tokens": 50,
+        "messages": [{"role": "user", "content": args.message}],
+    }
+
+    print(f"{DIM}→ POST {base_url}/v1/messages{RESET}")
+    print(f"{DIM}→ Bearer {token[:8]}…  model={args.model}{RESET}")
+    print()
+
+    try:
+        resp = httpx.post(
+            f"{base_url}/v1/messages",
+            headers={
+                "authorization": f"Bearer {token}",
+                "content-type": "application/json",
+                "anthropic-version": "2023-06-01",
+            },
+            json=payload,
+            timeout=30.0,
+        )
+    except httpx.ConnectError:
+        print(f"{RED}✗ Connection refused at {base_url}.{RESET}")
+        print(f"  Is Tourniquet running? Start it with: {BOLD}tourniquet start{RESET}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"{RED}✗ Request failed: {e}{RESET}")
+        sys.exit(1)
+
+    # Pre-flight blocked
+    if resp.status_code == 402:
+        body = resp.json().get("error", {})
+        kind = body.get("type", "")
+        print(f"{YELLOW}🛑 PRE-FLIGHT BLOCKED{RESET} — Tourniquet stopped this before it reached Anthropic.")
+        print(f"  Type     : {kind}")
+        print(f"  Reason   : {body.get('message', '?')}")
+        if "display" in body:
+            d = body["display"]
+            print(f"  Today    : {d.get('spent', '?')} of {d.get('cap', '?')}")
+            if "projected" in d:
+                print(f"  Projected: {d.get('projected', '?')} (over by {d.get('overage', d.get('tolerance', '?'))})")
+        if body.get("lift_active"):
+            print(f"  Lift active until {body.get('lift_expires_at', '?')}")
+        print()
+        print(f"  {DIM}Lift today: tourniquet lift <key> --multiplier 2{RESET}")
+        sys.exit(0)
+
+    if resp.status_code == 401:
+        print(f"{RED}✗ 401 — your tq_ token is unknown to this proxy.{RESET}")
+        print(f"  Check {BOLD}tourniquet status{RESET} or create a fresh key.")
+        sys.exit(1)
+
+    if resp.status_code != 200:
+        print(f"{RED}✗ HTTP {resp.status_code}{RESET}")
+        print(f"  Body: {resp.text[:300]}")
+        sys.exit(1)
+
+    # Success — parse Anthropic's response shape
+    body = resp.json()
+    content = body.get("content", [])
+    text = content[0].get("text", "") if content and isinstance(content[0], dict) else ""
+    usage = body.get("usage", {}) or {}
+    in_tokens = int(usage.get("input_tokens", 0) or 0)
+    out_tokens = int(usage.get("output_tokens", 0) or 0)
+    model = body.get("model", args.model)
+    request_id = body.get("id", "")
+
+    # Compute cost via the same logic the proxy uses
+    try:
+        from tourniquet.billing.formatting import format_money
+        from tourniquet.billing.pricing import cost_usd_cents
+        from tourniquet.config import settings
+        cost_cents = cost_usd_cents(model, in_tokens, out_tokens)
+        cost_str = format_money(cost_cents, settings.display_currency)
+    except Exception:
+        cost_str = f"~{(in_tokens + out_tokens)} tokens"
+
+    bar = "─" * 60
+    print(f"{GREEN}✓ Routed through Tourniquet → Anthropic → back to you{RESET}")
+    print(bar)
+    print(f"  {BOLD}Proxy{RESET}        {base_url}")
+    print(f"  {BOLD}Model{RESET}        {model}")
+    print(f"  {BOLD}Request ID{RESET}   {request_id}")
+    print()
+    print(f"  {BOLD}You said{RESET}     {args.message!r}")
+    print(f"  {BOLD}Claude said{RESET}  {GREEN}{text!r}{RESET}")
+    print()
+    print(f"  {BOLD}Tokens{RESET}       {in_tokens} in  /  {out_tokens} out")
+    print(f"  {BOLD}Cost{RESET}         {cost_str}  {DIM}(billed against your tq_ key's cap){RESET}")
+    print(bar)
+    print(f"  {DIM}Open the dashboard to see this request in the live spend bar:{RESET}")
+    print(f"  {base_url.replace('/v1/messages', '')}/dashboard")
+    print()
+
+
 def cmd_lift(args: argparse.Namespace) -> None:
     import asyncio
     from datetime import date, datetime, timedelta, timezone
@@ -298,6 +418,13 @@ def main() -> None:
     p_lift.add_argument("key", help="Key name")
     p_lift.add_argument("--multiplier", type=float, default=2.0)
 
+    # test — pretty smoke test
+    p_test = sub.add_parser("test", help="Send a test request through the proxy and pretty-print")
+    p_test.add_argument("--token", help="tq_ token (default: $ANTHROPIC_API_KEY)")
+    p_test.add_argument("--base-url", dest="base_url", help="Proxy URL (default: $ANTHROPIC_BASE_URL or 127.0.0.1:8787)")
+    p_test.add_argument("--message", default="say hi in 5 words", help="Prompt content")
+    p_test.add_argument("--model", default="claude-haiku-4-5-20251001", help="Model ID")
+
     # register-url-handler
     sub.add_parser(
         "register-url-handler",
@@ -323,6 +450,7 @@ def main() -> None:
         "add-key": cmd_add_key,
         "status": cmd_status,
         "lift": cmd_lift,
+        "test": cmd_test,
         "register-url-handler": cmd_register_url_handler,
         "handle-url": cmd_handle_url,
     }
