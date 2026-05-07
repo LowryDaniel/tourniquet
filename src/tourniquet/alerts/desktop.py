@@ -49,6 +49,11 @@ def _build_message(message: str, event: object | None) -> str:
         else:  # "both"
             message = f"{message}\n{lift_url}\n{cli_cmd}"
 
+    # Append kill-now URL when kill_enabled is False (monitor mode)
+    kill_now_url: str | None = getattr(event, "kill_now_url", None) if event is not None else None
+    if kill_now_url:
+        message = f"{message}\n🛑 Kill now: {kill_now_url}"
+
     return message
 
 

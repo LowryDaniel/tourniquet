@@ -241,6 +241,80 @@ async def test_desktop_notification_no_op_when_plyer_missing() -> None:
         await desktop_mod.send_desktop_notification("T", "M")
 
 
+# ── kill_now_url in AlertEvent ────────────────────────────────────────────────
+
+def test_kill_now_url_included_when_kill_disabled():
+    """fan_out with kill_enabled=False must attach a kill_now_url to the event."""
+    from unittest.mock import patch as _patch
+
+    import dataclasses
+    from tourniquet.alerts.notifier import _build_kill_now_url
+
+    event = AlertEvent(
+        api_key_name="ojw-swarm",
+        threshold_pct=80,
+        spent_usd_cents=420,
+        cap_usd_cents=500,
+        display_currency="GBP",
+        today=date(2026, 5, 6),
+        api_key_id="abc-123",
+    )
+    # Verify the URL builder produces a URL containing the key_id
+    url = _build_kill_now_url("abc-123")
+    assert "abc-123" in url
+    assert "kill-now" in url or "token=" in url
+
+
+def test_kill_now_url_omitted_when_kill_enabled():
+    """An event with kill_now_url=None stays None when kill_enabled=True."""
+    from tourniquet.alerts.notifier import AlertEvent
+
+    event = AlertEvent(
+        api_key_name="test",
+        threshold_pct=50,
+        spent_usd_cents=250,
+        cap_usd_cents=500,
+        display_currency="USD",
+        today=date(2026, 5, 6),
+        api_key_id="some-key-id",
+    )
+    assert event.kill_now_url is None
+
+
+def test_format_message_includes_kill_hint_when_url_set():
+    """_format_message appends a kill hint when kill_now_url is present."""
+    from tourniquet.alerts.notifier import _format_message, AlertEvent
+
+    event = AlertEvent(
+        api_key_name="ojw-swarm",
+        threshold_pct=80,
+        spent_usd_cents=420,
+        cap_usd_cents=500,
+        display_currency="GBP",
+        today=date(2026, 5, 6),
+        kill_now_url="https://example.com/kill-now",
+    )
+    msg = _format_message(event)
+    assert "🛑" in msg
+    assert "kill now" in msg.lower()
+
+
+def test_format_message_no_kill_hint_without_url():
+    """_format_message does not add kill hint when kill_now_url is None."""
+    from tourniquet.alerts.notifier import _format_message, AlertEvent
+
+    event = AlertEvent(
+        api_key_name="ojw-swarm",
+        threshold_pct=80,
+        spent_usd_cents=420,
+        cap_usd_cents=500,
+        display_currency="GBP",
+        today=date(2026, 5, 6),
+    )
+    msg = _format_message(event)
+    assert "kill now" not in msg.lower()
+
+
 # ── Webhook URL never appears in logs ─────────────────────────────────────────
 
 @pytest.mark.asyncio

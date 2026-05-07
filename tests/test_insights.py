@@ -67,7 +67,7 @@ def _make_key(session: AsyncSession) -> ApiKey:
         name="test-key",
         tq_token_hash="$2b$12$fake",
         anthropic_key_encrypted="enc",
-        profile="hobby",
+        profile="standard",
         daily_cap_usd_cents=5000,
         kill_enabled=True,
     )

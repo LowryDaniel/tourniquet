@@ -268,6 +268,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         "keys": summaries,
         "selected_id": first_id,
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "currency": settings.display_currency,
         **panel_ctx,
     })
@@ -311,6 +312,7 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         "suggestion": suggestion,
         "insights": insights,
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "currency": settings.display_currency,
         "auto_tune_modes": ["off", "suggest", "creep"],
     }
@@ -402,6 +404,7 @@ async def update_cap(
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": "Cap updated.",
     })
@@ -420,6 +423,7 @@ async def toggle_kill(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": f"Kill switch {'enabled' if summary['kill_enabled'] else 'disabled'}.",
     })
@@ -445,6 +449,7 @@ async def update_profile(
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": "Profile updated.",
     })
@@ -470,6 +475,7 @@ async def update_auto_tune(
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": "Auto-tune updated.",
     })
@@ -507,6 +513,7 @@ async def lift_cap(
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": f"Cap lifted to {format_money(lifted_cents, settings.display_currency)} until midnight UTC.",
     })
@@ -526,6 +533,7 @@ async def unlift_cap(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": "Lift cleared. Base cap restored.",
     })
@@ -574,6 +582,7 @@ async def apply_suggestion(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
         "flash": flash,
     })
@@ -792,25 +801,25 @@ async def apply_suggestion_full(
 ) -> HTMLResponse:
     """Apply both the suggested cap AND the recommended profile in one click."""
     if profile not in PROFILES:
-        profile = "hobby"
+        profile = "standard"
     async with get_session() as session:
         key = await _get_key_or_404(key_id, session)
         ceil = key.absolute_ceiling_usd_cents
         new_cap = min(cap_cents, ceil)
         key.daily_cap_usd_cents = new_cap
         key.profile = profile
-        # When recommending production, kill_enabled defaults OFF (per profile design)
-        if profile == "production":
-            key.kill_enabled = False
+        # Respect the profile's default_kill_enabled — monitor defaults to OFF
+        key.kill_enabled = PROFILES[profile].default_kill_enabled
         await session.commit()
 
     currency = settings.display_currency
+    kill_note = " Kill switch OFF (monitor mode — alerts only)." if not PROFILES[profile].default_kill_enabled else ""
     return HTMLResponse(
         f'<div class="intel-section intel-result">'
         f'<h2 class="next-steps-heading">✓ Applied</h2>'
         f'<p>Cap set to <strong>{format_money(new_cap, currency)}</strong>, '
         f'profile set to <strong>{profile}</strong>.'
-        f'{" Kill switch OFF (production default)." if profile == "production" else ""}</p>'
+        f'{kill_note}</p>'
         f'<a href="/dashboard/key/{key_id}" class="btn-primary">Open dashboard</a>'
         f'</div>'
     )
@@ -845,6 +854,8 @@ async def apply_suggestion_direct(
 async def new_key_form(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "key_new.html", {
         "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
+        "profiles_obj": PROFILES,
         "currency": settings.display_currency,
     })
 
@@ -855,7 +866,7 @@ async def create_key(
     name: str = Form(...),
     anthropic_key: str = Form(...),
     daily_cap: float = Form(...),
-    profile: str = Form("hobby"),
+    profile: str = Form("standard"),
     kill_enabled: bool = Form(True),
 ) -> HTMLResponse:
     if profile not in PROFILES:

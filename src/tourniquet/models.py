@@ -82,7 +82,7 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     tq_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     anthropic_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    profile: Mapped[str] = mapped_column(String(50), nullable=False, default="hobby")
+    profile: Mapped[str] = mapped_column(String(50), nullable=False, default="standard")
     daily_cap_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
     kill_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     alert_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

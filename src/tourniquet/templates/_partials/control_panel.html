@@ -95,19 +95,17 @@
     </script>
 
     {# Profile — auto-save on change, with hover descriptions #}
-    <label class="control-label" title="hobby = wide buffer · production = alerts only · demo = never silent kill">Profile <span class="help-icon">ⓘ</span></label>
+    <label class="control-label" title="standard = hard kill at 100% · strict = hard kill, no chatter · monitor = alerts only, one-click kill link">Profile <span class="help-icon">ⓘ</span></label>
     <form class="control-row"
           hx-post="/dashboard/key/{{ key_id }}/profile"
           hx-target="#control-panel"
           hx-swap="outerHTML"
           hx-trigger="change">
       <select name="profile" class="control-select">
-        <option value="hobby" {% if key.profile == "hobby" %}selected{% endif %}
-                title="Wide buffer: alerts at 80%, hard-kills only at 200% of cap.">hobby</option>
-        <option value="production" {% if key.profile == "production" %}selected{% endif %}
-                title="Alerts at 50/80/100%. Kill defaults OFF — alerts only, won't break prod.">production</option>
-        <option value="demo" {% if key.profile == "demo" %}selected{% endif %}
-                title="Alerts but never silently kills. Best for live demos.">demo</option>
+        {% for name, p in profiles_obj.items() %}
+        <option value="{{ name }}" {% if key.profile == name %}selected{% endif %}
+                title="{{ p.description }}">{{ name }}</option>
+        {% endfor %}
       </select>
     </form>
 
@@ -125,16 +123,33 @@
       </select>
     </form>
 
-    {# Kill switch — toggle on click #}
+    {# Kill switch — toggle on click; disabling requires confirmation #}
     <label class="control-label">Kill switch</label>
     <form class="control-row"
+          id="kill-form-{{ key_id }}"
           hx-post="/dashboard/key/{{ key_id }}/kill"
           hx-target="#control-panel"
-          hx-swap="outerHTML">
+          hx-swap="outerHTML"
+          hx-on::before-request="if (!confirmKillToggle_{{ key_id|replace('-','_') }}()) { event.preventDefault(); }">
+      <input type="hidden" name="kill_currently_enabled" value="{{ 'true' if key.kill_enabled else 'false' }}">
       <button type="submit" class="btn-small {% if key.kill_enabled %}btn-active{% endif %}">
         {% if key.kill_enabled %}✓ enabled{% else %}○ disabled{% endif %}
       </button>
     </form>
+    <script>
+      function confirmKillToggle_{{ key_id|replace('-','_') }}() {
+        var isEnabled = document.querySelector('#kill-form-{{ key_id }} [name=kill_currently_enabled]').value === 'true';
+        if (isEnabled) {
+          return confirm(
+            "⚠️ Disabling the kill switch removes hard cap enforcement.\n\n" +
+            "Tourniquet will still record spend and alert you, but it will NOT block " +
+            "requests when you exceed your cap. You will be billed for whatever your " +
+            "agents do.\n\nAre you sure?"
+          );
+        }
+        return true; // enabling is always friction-free
+      }
+    </script>
 
     {# Lift today — fires on click #}
     <label class="control-label">Lift today</label>

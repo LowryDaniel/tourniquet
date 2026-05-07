@@ -27,19 +27,19 @@
 
     <label>Profile
       <select name="profile" id="profile-select" onchange="updateProfileHelp()">
-        <option value="hobby" title="Wide buffer: alerts at 80%, hard-kills only at 200% of cap. Best for personal projects.">hobby — wide buffer (kill at 200%)</option>
-        <option value="production" title="Alerts at 50/80/100%. Kill switch defaults OFF — alerts only, doesn't break prod.">production — alerts at 50/80/100%, no auto-kill</option>
-        <option value="demo" title="Alerts but never silently kills. Best for live demos where you want to see the wall coming.">demo — alerts only, never silently kills</option>
+        {% for name, p in profiles_obj.items() %}
+        <option value="{{ name }}"{% if name == "standard" %} selected{% endif %}>{{ name }} — {{ p.description }}</option>
+        {% endfor %}
       </select>
       <div class="help-block" id="profile-help">
-        <strong>hobby:</strong> Personal projects. Alerts at 80% of cap. Hard-kills only when you've spent 2× the cap (very forgiving). <em>Pick this if you want a wide safety buffer.</em>
+        <strong>standard:</strong> {{ profiles_obj.standard.description }} <em>Pick this if {{ profiles_obj.standard.pick_me_if }}</em>
       </div>
     </label>
     <script>
       const profileHelp = {
-        "hobby": "<strong>hobby:</strong> Personal projects. Alerts at 80% of cap. Hard-kills only when you've spent 2× the cap (very forgiving). <em>Pick this if you want a wide safety buffer.</em>",
-        "production": "<strong>production:</strong> Alerts at 50%, 80%, and 100%. Kill switch defaults OFF — you'll get warnings but the proxy won't break your prod traffic. <em>Pick this if downtime hurts more than overspend.</em>",
-        "demo": "<strong>demo:</strong> Alerts at 80%. Never silently kills — best for live demos where you want to see the wall coming and react manually. <em>Pick this if you're showing the product to someone.</em>"
+        {% for name, p in profiles_obj.items() %}
+        "{{ name }}": "<strong>{{ name }}:</strong> {{ p.description }} <em>Pick this if {{ p.pick_me_if }}</em>",
+        {% endfor %}
       };
       function updateProfileHelp() {
         const v = document.getElementById('profile-select').value;
@@ -48,9 +48,24 @@
     </script>
 
     <label class="checkbox-label">
-      <input type="checkbox" name="kill_enabled" value="true" checked>
+      <input type="checkbox" name="kill_enabled" value="true" checked
+             onchange="confirmKillDisable(this)">
       Enable kill switch
+      <span class="help-inline">🛡 Recommended ON. Disabling means alerts only — no enforcement.</span>
     </label>
+    <script>
+      function confirmKillDisable(cb) {
+        if (!cb.checked) {
+          const ok = confirm(
+            "⚠️ Disabling the kill switch removes hard cap enforcement.\n\n" +
+            "Tourniquet will still record spend and alert you, but it will NOT block " +
+            "requests when you exceed your cap. You will be billed for whatever your " +
+            "agents do.\n\nAre you sure?"
+          );
+          if (!ok) { cb.checked = true; }
+        }
+      }
+    </script>
 
     <div class="form-actions">
       <a href="/dashboard" class="btn-small">Cancel</a>

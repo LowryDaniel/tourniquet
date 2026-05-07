@@ -74,7 +74,7 @@ async def _bootstrap(email: str, name: str, cap_usd_cents: int, anthropic_key: s
             name=name,
             tq_token_hash=token_hash,
             anthropic_key_encrypted=encrypted_anthropic,
-            profile="hobby",
+            profile="standard",
             daily_cap_usd_cents=cap_usd_cents,
             kill_enabled=True,
             alert_email=email,

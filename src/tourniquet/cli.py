@@ -169,7 +169,7 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
                 name=name,
                 tq_token_hash=token_hash,
                 anthropic_key_encrypted=encrypted_key,
-                profile="hobby",
+                profile="standard",
                 daily_cap_usd_cents=cap_cents,
                 kill_enabled=True,
                 user_id=user.id,

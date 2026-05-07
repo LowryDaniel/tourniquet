@@ -535,7 +535,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_update.add_argument("key", metavar="KEY-ID-OR-NAME")
     p_update.add_argument("--cap", type=float, help="New daily cap in major currency units")
     p_update.add_argument("--currency", help="Currency code for --cap (default: settings.display_currency)")
-    p_update.add_argument("--profile", choices=["hobby", "production", "demo"], help="Billing profile")
+    p_update.add_argument("--profile", choices=["standard", "strict", "monitor"], help="Billing profile")
     kill_group = p_update.add_mutually_exclusive_group()
     kill_group.add_argument("--kill-enabled", dest="kill_enabled", action="store_true", default=None)
     kill_group.add_argument("--kill-disabled", dest="kill_enabled", action="store_false")

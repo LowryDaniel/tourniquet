@@ -23,7 +23,7 @@ def _make_key(
     name: str = "test-key",
     daily_cap: int = 1000,
     absolute_ceiling: int = 10000,
-    profile: str = "hobby",
+    profile: str = "standard",
     kill_enabled: bool = True,
     auto_tune_mode: str = "off",
     lifted_cap: int | None = None,
@@ -262,7 +262,7 @@ def test_lift_multiplier(client):
     class _MutableKey:
         id = uuid.uuid4()
         name = "test-lift"
-        profile = "hobby"
+        profile = "standard"
         kill_enabled = True
         auto_tune_mode = "off"
         daily_cap_usd_cents = 500

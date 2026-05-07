@@ -2,6 +2,18 @@
 
 Newest at top. **Status: done** entries link to the relevant module/commit when known.
 
+## 2026-05-07 — Profile redesign + one-click kill from alerts
+**Want:** The original `hobby/production/demo` profiles didn't add value (`kill_at_pct` and `kill_silently` fields were unused; `production`'s default-OFF kill was footgun-shaped; `demo` had no real use case). Replace with three profiles where the differences are *real*. Plus: when a key is in observe-mode (kill off), every alert must include a one-click way to enforce the cap.
+**Why:** Fake configuration is worse than no configuration. Disabling the kill switch is a deliberate trade-off — when the user makes that choice, they need a fast escape hatch when reality bites.
+**Status: done** —
+- New profiles: `standard` (kill on, alerts at 50/80/100%), `strict` (kill on, alert at 100% only), `monitor` (kill OFF, alerts at 50/80/100% with one-click kill links).
+- Dropped vestigial fields `kill_at_pct` and `kill_silently`.
+- Heavy confirm dialog when toggling kill OFF in the dashboard or unchecking it on the new-key form (enabling stays friction-free).
+- New `/admin/kill-now/{key_id}?token=<...>` magic-link endpoint with 24h `itsdangerous`-signed token + GET confirmation page + POST that sets `kill_enabled=True` and clamps `daily_cap` to current spend.
+- Telegram inline keyboard adds 🛑 Kill now button alongside lift buttons.
+- Email, Slack, JSONL log, generic webhook, and desktop notification all surface the kill-now URL when applicable.
+- `tests/test_admin_kill_now.py` (new) + `tests/test_notifier.py` extended. 147 tests pass.
+
 ## 2026-05-07 — Tolerant pre-flight max-cost guard
 **Want:** Reject a request pre-flight (HTTP 402) if its worst-case cost would push today's spend over cap by more than a tolerance.
 **Why:** Without it, a single oversized streaming request can produce most of its output before Anthropic reveals output tokens at end-of-stream — leaving the user billed for ~18 KB of essay before the cap-hit injection fires. The mid-stream kill is post-hoc unless input cost alone exceeds the cap.

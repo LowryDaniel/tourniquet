@@ -1,10 +1,12 @@
 """Telegram bot callback handler.
 
 Receives Telegram Update objects when the user taps an inline button on a
-cap-hit notification. Parses callback_data and dispatches to the lift logic.
+cap-hit notification. Parses callback_data and dispatches to the lift or
+kill_now logic.
 
-callback_data format: "lift|<key_id>|<mode>"
-  mode values: "2x" (2× multiplier), "ceiling" (to_ceiling), "ignore" (no-op)
+callback_data formats:
+  "lift|<key_id>|<mode>"    — mode: "2x", "ceiling", "ignore"
+  "kill_now|<key_id>"       — immediately kill the key (kill_enabled=True, cap clamped)
 
 Auth: X-Telegram-Bot-Api-Secret-Token header — must match settings.telegram_webhook_secret.
 Register the webhook with:
@@ -16,6 +18,7 @@ Register the webhook with:
 from __future__ import annotations
 
 import logging
+import uuid as _uuid_mod
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -87,6 +90,27 @@ async def _apply_lift_from_callback(key_id: str, mode: str) -> None:
         )
 
 
+async def _apply_kill_now_from_callback(key_id: str) -> None:
+    """Apply kill-now directly from a Telegram inline button tap.
+
+    Delegates to the shared _apply_kill_now helper in admin routes.
+    Accepts UUID string; silently ignores if key not found.
+    """
+    from tourniquet.routes.admin import _apply_kill_now
+
+    try:
+        key_uuid = _uuid_mod.UUID(key_id)
+    except ValueError:
+        log.warning("Telegram kill_now callback: invalid UUID %r — ignoring", key_id)
+        return
+
+    try:
+        name, new_cap = await _apply_kill_now(key_uuid)
+        log.info("Telegram kill_now: killed key %s (%s), cap clamped to %d cents", key_id, name, new_cap)
+    except Exception as exc:
+        log.warning("Telegram kill_now callback failed for key %r: %s", key_id, exc)
+
+
 @router.post("/callback")
 async def telegram_callback(request: Request) -> dict:
     """Telegram sends an Update object when a user taps an inline button.
@@ -105,16 +129,24 @@ async def telegram_callback(request: Request) -> dict:
     callback_query = update.get("callback_query") or {}
     data: str = callback_query.get("data", "")
 
-    if not data.startswith("lift|"):
+    if data.startswith("lift|"):
+        parts = data.split("|")
+        if len(parts) != 3:
+            log.warning("Malformed lift callback_data: %r", data)
+            return {"ok": True}
+        _, key_id, mode = parts
+        await _apply_lift_from_callback(key_id.strip(), mode.strip())
+
+    elif data.startswith("kill_now|"):
+        parts = data.split("|")
+        if len(parts) != 2:
+            log.warning("Malformed kill_now callback_data: %r", data)
+            return {"ok": True}
+        _, key_id = parts
+        await _apply_kill_now_from_callback(key_id.strip())
+
+    else:
         # Not our callback (could be another handler); acknowledge and ignore
-        return {"ok": True}
-
-    parts = data.split("|")
-    if len(parts) != 3:
-        log.warning("Malformed callback_data: %r", data)
-        return {"ok": True}
-
-    _, key_id, mode = parts
-    await _apply_lift_from_callback(key_id.strip(), mode.strip())
+        pass
 
     return {"ok": True}

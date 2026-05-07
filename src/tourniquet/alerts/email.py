@@ -54,6 +54,12 @@ async def send_email(message: str, event: object) -> None:
         int(event.spent_usd_cents / event.cap_usd_cents * 100) if event.cap_usd_cents else 0
     )
 
+    kill_now_url: str | None = getattr(event, "kill_now_url", None)
+    kill_html = (
+        f"<p><a href='{kill_now_url}' style='color:#dc2626;font-weight:bold'>"
+        f"🛑 Kill now (one-click, link expires in 24h)</a></p>"
+    ) if kill_now_url else ""
+
     resend.api_key = settings.resend_api_key
     resend.Emails.send({
         "from": settings.resend_from_email,
@@ -64,6 +70,7 @@ async def send_email(message: str, event: object) -> None:
             f"<strong>{spent_display}</strong> of your {cap_display} daily cap "
             f"({pct_used}%).</p>"
             f"<p>{message}</p>"
+            f"{kill_html}"
             f"<p><a href='{settings.app_base_url}/dashboard'>View dashboard</a></p>"
         ),
     })

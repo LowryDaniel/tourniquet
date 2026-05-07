@@ -54,7 +54,7 @@ def test_parser_update_all_flags():
         "update", "my-key",
         "--cap", "15.00",
         "--currency", "GBP",
-        "--profile", "production",
+        "--profile", "monitor",
         "--kill-enabled",
         "--auto-tune", "suggest",
         "--alert-email", "me@example.com",
@@ -62,7 +62,7 @@ def test_parser_update_all_flags():
     ])
     assert args.cap == 15.0
     assert args.currency == "GBP"
-    assert args.profile == "production"
+    assert args.profile == "monitor"
     assert args.auto_tune == "suggest"
     assert args.alert_email == "me@example.com"
     assert args.ceiling == 50.0
@@ -230,11 +230,11 @@ async def test_lookup_by_uuid_prefix(monkeypatch):
 
 def test_table_output():
     from manage_keys import _table
-    rows = [["abc12345", "my-key", "$5.00", "$1.00", "hobby", "yes", "off", "2025-01-01"]]
+    rows = [["abc12345", "my-key", "$5.00", "$1.00", "standard", "yes", "off", "2025-01-01"]]
     headers = ["ID(short)", "Name", "Cap", "Spent today", "Profile", "Kill", "Auto-tune", "Created"]
     output = _table(rows, headers)
     assert "my-key" in output
-    assert "hobby" in output
+    assert "standard" in output
     assert "ID(short)" in output
 
 

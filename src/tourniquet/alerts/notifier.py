@@ -37,6 +37,15 @@ class AlertEvent:
     display_currency: str     # for format_money
     today: date
     api_key_id: str = ""      # UUID string — used for Telegram lift buttons
+    kill_now_url: str | None = None   # signed magic-link; set when kill_enabled=False
+
+
+def _build_kill_now_url(key_id: str) -> str:
+    """Return a signed 24h-expiry kill-now URL."""
+    from itsdangerous import URLSafeTimedSerializer
+    s = URLSafeTimedSerializer(settings.secret_key, salt="kill-now")
+    token = s.dumps(key_id)
+    return f"{settings.app_base_url}/admin/kill-now/{key_id}?token={token}"
 
 
 def _format_message(event: AlertEvent) -> str:
@@ -48,14 +57,22 @@ def _format_message(event: AlertEvent) -> str:
             f"\U0001f6d1 Tourniquet: {event.api_key_name} cap reached — "
             f"{spent}/{cap} today, requests now blocked"
         )
-    return (
+
+    base = (
         f"⚠️ Tourniquet: {event.api_key_name} at {event.threshold_pct}% — "
         f"{spent} of {cap} today"
     )
+    if event.kill_now_url:
+        base += ". Click 🛑 to kill now."
+    return base
 
 
-async def fan_out(event: AlertEvent) -> dict[str, str]:
+async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, str]:
     """Send the alert to every configured channel concurrently.
+
+    Pass kill_enabled=False when the key is in monitor mode — this causes a
+    signed kill-now URL to be embedded in the event and surfaced in all channels
+    that support it.
 
     Returns a dict mapping channel name to one of:
       "sent" | "skipped:no-config" | "error:<message>"
@@ -68,6 +85,10 @@ async def fan_out(event: AlertEvent) -> dict[str, str]:
     from tourniquet.alerts.slack import send_slack
     from tourniquet.alerts.telegram import send_telegram, send_telegram_with_lift_buttons
     from tourniquet.alerts.webhook import send_webhook
+
+    # Attach kill-now URL when kill is disabled (monitor mode)
+    if not kill_enabled and event.api_key_id and event.kill_now_url is None:
+        event = dataclasses.replace(event, kill_now_url=_build_kill_now_url(event.api_key_id))
 
     message = _format_message(event)
 
@@ -103,14 +124,14 @@ async def fan_out(event: AlertEvent) -> dict[str, str]:
 
     # Slack
     if settings.slack_webhook_url:
-        coroutines.append(_run("slack", send_slack(message)))
+        coroutines.append(_run("slack", send_slack(message, event)))
     else:
         tasks.append(("slack", False))
 
     # Telegram — use lift buttons for >= 80% or cap-hit
     if settings.telegram_bot_token and settings.telegram_chat_id:
         if wants_lift_buttons and event.api_key_id:
-            coroutines.append(_run("telegram", send_telegram_with_lift_buttons(message, event.api_key_id)))
+            coroutines.append(_run("telegram", send_telegram_with_lift_buttons(message, event.api_key_id, event.kill_now_url)))
         else:
             coroutines.append(_run("telegram", send_telegram(message)))
     else:

@@ -1,28 +1,70 @@
-"""Admin routes — cap lift management.
+"""Admin routes — cap lift management and kill-now magic links.
 
 Endpoints:
-  POST /admin/lift   — temporarily raise a key's daily cap
-  POST /admin/unlift — clear a lift early
+  POST /admin/lift          — temporarily raise a key's daily cap
+  POST /admin/unlift        — clear a lift early
+  GET  /admin/kill-now/{id} — confirm page for one-click kill
+  POST /admin/kill-now/{id} — execute the kill
 
 Auth: Bearer tq_* token in Authorization header — must match the key being lifted.
+Kill-now uses itsdangerous URLSafeTimedSerializer (salt "kill-now", 24h expiry).
 """
 
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 import bcrypt
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tourniquet.billing.caps import get_today_spend
+from tourniquet.config import settings
 from tourniquet.db import get_session
 from tourniquet.models import ApiKey
 
 router = APIRouter(prefix="/admin")
+
+_KILL_NOW_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
+
+
+def _kill_now_signer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(settings.secret_key, salt="kill-now")
+
+
+def build_kill_now_url(key_id: str) -> str:
+    """Return a signed, 24h-expiry kill-now URL for the given key UUID string."""
+    token = _kill_now_signer().dumps(key_id)
+    return f"{settings.app_base_url}/admin/kill-now/{key_id}?token={token}"
+
+
+async def _apply_kill_now(key_id: uuid.UUID) -> tuple[str, int]:
+    """Set kill_enabled=True and clamp daily_cap to today's spend.
+
+    Returns (key_name, new_cap_cents).
+    """
+    today = date.today()
+    async with get_session() as session:
+        key = await session.get(ApiKey, key_id)
+        if key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
+
+        today_spend = await get_today_spend(key.id, today, session)
+        # Clamp to current cap if spend is 0 (avoid setting cap to 0)
+        new_cap = max(today_spend, 1)
+
+        key.kill_enabled = True
+        key.daily_cap_usd_cents = new_cap
+        await session.commit()
+
+        return key.name, new_cap
 
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
@@ -212,3 +254,89 @@ async def unlift_cap(request: Request, payload: LiftRequest) -> UnliftResponse:
             key_name=api_key.name,
             restored_cap_usd_cents=api_key.daily_cap_usd_cents,
         )
+
+
+# ── Kill-now magic-link endpoints ──────────────────────────────────────────────
+
+@router.get("/kill-now/{key_id}")
+async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> HTMLResponse:
+    """Magic-link confirmation page. Verifies the token, then shows a confirm button."""
+    try:
+        payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
+    except SignatureExpired:
+        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h). Request a new alert.")
+    except BadSignature:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+
+    if payload_id != str(key_id):
+        raise HTTPException(status_code=400, detail="Token key mismatch.")
+
+    async with get_session() as session:
+        key = await session.get(ApiKey, key_id)
+        if key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
+        key_name = key.name
+
+    dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
+    return HTMLResponse(f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Kill {key_name}? — Tourniquet</title>
+<style>
+  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
+  h1 {{font-size:1.5rem;margin-bottom:.5rem}}
+  .warning {{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:.75rem 1rem;margin:1rem 0}}
+  .btn-danger {{background:#dc2626;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:6px;
+                font-size:1rem;cursor:pointer;font-weight:600}}
+  .btn-danger:hover {{background:#b91c1c}}
+  .cancel {{display:inline-block;margin-left:1rem;color:#555;text-decoration:none}}
+</style></head>
+<body>
+<h1>🛑 Kill <em>{key_name}</em>?</h1>
+<div class="warning">
+  This will set <strong>kill_enabled = True</strong> and clamp the daily cap to
+  today's current spend — so the next request will be blocked immediately (402).
+</div>
+<form method="post">
+  <input type="hidden" name="token" value="{token}">
+  <button type="submit" class="btn-danger">Confirm kill</button>
+  <a href="{dashboard_url}" class="cancel">Cancel</a>
+</form>
+</body></html>""")
+
+
+@router.post("/kill-now/{key_id}")
+async def kill_now_apply(
+    request: Request,
+    key_id: uuid.UUID,
+    token: str = Form(...),
+) -> HTMLResponse:
+    """Execute the kill: sets kill_enabled=True and clamps cap to today's spend."""
+    try:
+        payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
+    except SignatureExpired:
+        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h).")
+    except BadSignature:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+
+    if payload_id != str(key_id):
+        raise HTTPException(status_code=400, detail="Token key mismatch.")
+
+    key_name, new_cap = await _apply_kill_now(key_id)
+
+    dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
+    return HTMLResponse(f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Killed — Tourniquet</title>
+<style>
+  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
+  h1 {{font-size:1.5rem;color:#16a34a}}
+  .btn {{display:inline-block;background:#2563eb;color:#fff;padding:.5rem 1.2rem;
+         border-radius:6px;text-decoration:none;font-weight:600;margin-top:1rem}}
+</style></head>
+<body>
+<h1>✓ Killed.</h1>
+<p>The next request on <strong>{key_name}</strong> will be blocked (402).
+   Daily cap clamped to today's spend ({new_cap} cents).</p>
+<p>You can adjust the cap or re-enable the kill switch on the dashboard.</p>
+<a href="{dashboard_url}" class="btn">Open dashboard →</a>
+</body></html>""")

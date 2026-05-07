@@ -39,29 +39,27 @@ class Suggestion:
 
 @dataclass
 class ProfileRecommendation:
-    profile: str             # "hobby" | "production" | "demo"
+    profile: str             # "standard" | "monitor"
     reason: str              # plain-English explanation
     avg_daily_usd_cents: int
     daily_cv: float          # coefficient of variation (stddev/mean) — measures volatility
 
 
 def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendation:
-    """Pick hobby/production/demo based on the user's actual spending pattern.
+    """Pick standard/monitor based on the user's actual spending pattern.
 
     Heuristic:
-      - production: low variance (CV < 0.4) AND meaningful spend (avg ≥ $20/day)
-                    — looks like steady production traffic
-      - hobby: anything else (default — wide buffer, safer for solo devs)
+      - monitor: low variance (CV < 0.4) AND meaningful spend (avg ≥ $20/day)
+                 — looks like steady production traffic; alerts without auto-kill
+      - standard: anything else (default — hard kill with lead-time alerts)
 
-    `demo` is rarely auto-recommended because it's typically a deliberate
-    user choice (e.g., live demo where you want manual control). Reserved for
-    explicit selection in the dashboard.
+    `strict` is rarely auto-recommended; reserved for explicit user selection.
     """
     active = [v for v in daily_totals_usd_cents if v > 0]
     if len(active) < 3:
         return ProfileRecommendation(
-            profile="hobby",
-            reason="Not enough spending history yet — defaulting to hobby (the safest, most forgiving profile).",
+            profile="standard",
+            reason="Not enough spending history yet — defaulting to standard (hard kill at 100% with warnings at 50% and 80%).",
             avg_daily_usd_cents=0,
             daily_cv=0.0,
         )
@@ -73,12 +71,13 @@ def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendatio
 
     if cv < 0.4 and avg >= 2000:  # steady ≥ $20/day
         return ProfileRecommendation(
-            profile="production",
+            profile="monitor",
             reason=(
                 f"Your spend is steady (variance only {cv * 100:.0f}%) at "
                 f"~${avg / 100:.2f}/day. That looks like production traffic — "
-                f"the production profile alerts you at 50/80/100% but won't "
-                f"silently kill requests, so your live workload stays up."
+                f"the monitor profile alerts you at 50/80/100% but won't "
+                f"auto-kill requests. Every alert includes a one-click kill link "
+                f"so you can enforce manually when you decide to."
             ),
             avg_daily_usd_cents=int(avg),
             daily_cv=cv,
@@ -87,23 +86,23 @@ def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendatio
     if cv > 1.0:
         reason = (
             f"Your spend is volatile (variance {cv * 100:.0f}%) — some quiet days, "
-            f"some bursty. The hobby profile gives a wide 2× buffer for those "
-            f"occasional busy days."
+            f"some bursty. The standard profile gives a firm budget wall with "
+            f"lead-time alerts at 50% and 80% before the kill at 100%."
         )
     elif avg < 1000:
         reason = (
-            f"Light usage at ~${avg / 100:.2f}/day average. Hobby's wide buffer "
-            f"is the right default for personal projects and small workloads."
+            f"Light usage at ~${avg / 100:.2f}/day average. Standard's hard kill "
+            f"at 100% is the right default for personal projects and small workloads."
         )
     else:
         reason = (
-            f"Mixed pattern at ~${avg / 100:.2f}/day. Hobby's wide buffer is the "
-            f"safe default — you can switch to production later if your traffic "
-            f"becomes steadier."
+            f"Mixed pattern at ~${avg / 100:.2f}/day. Standard's hard kill is the "
+            f"safe default — you can switch to monitor later if your traffic "
+            f"becomes steadier and you need uninterrupted flow."
         )
 
     return ProfileRecommendation(
-        profile="hobby",
+        profile="standard",
         reason=reason,
         avg_daily_usd_cents=int(avg),
         daily_cv=cv,
