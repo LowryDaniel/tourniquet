@@ -26,12 +26,15 @@ Tourniquet is for the solo dev who runs Claude all day and needs exactly one thi
 
 **Alerts**
 - Desktop notifications (macOS/Linux/Windows)
-- Slack, Telegram (with inline lift buttons), email
+- Slack, Telegram (with inline lift + recovery buttons), email
 - JSONL log for scripting
+- One-click "killed, want to bump cap and continue?" recovery flow on every channel
+- See [docs/alerts-setup.md](docs/alerts-setup.md) for per-channel walkthroughs
 
 **Insights**
 - Per-key daily sparkline, model breakdown, hourly heatmap
 - By-caller and by `metadata.user_id` breakdown — see which agent is spending
+- Per-key **action history** — every kill/lift/bump tagged with the source channel (Slack tap, Telegram tap, web, CLI). Proof of every action even when the resulting cap value didn't visibly change.
 - All stored in SQLite on your machine
 
 **Privacy**

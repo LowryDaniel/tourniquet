@@ -34,6 +34,45 @@ async def send_telegram(message: str) -> None:
         log.warning("Telegram API returned status %d", resp.status_code)
 
 
+async def send_telegram_recovery_offer(
+    message: str,
+    key_id: str,
+    amounts_cents: list[int],
+) -> None:
+    """Send a 'killed, want to bump?' recovery prompt with one-tap callback buttons.
+
+    Buttons use callback_data so the action applies in-app via the Telegram
+    long-polling client (alerts/telegram_poller.py). No webhook / public URL
+    required.
+    """
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        return
+
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+
+    def _label(c: int) -> str:
+        return f"+${c // 100}" if c % 100 == 0 else f"+${c / 100:.2f}"
+
+    row = [
+        {"text": _label(c), "callback_data": f"lift_by_amount|{key_id}|{c}"}
+        for c in amounts_cents
+    ]
+    row.append({"text": "Leave it", "callback_data": f"lift_by_amount|{key_id}|0"})
+
+    payload = {
+        "chat_id": int(settings.telegram_chat_id),
+        "text": message,
+        "parse_mode": "HTML",
+        "reply_markup": {"inline_keyboard": [row]},
+    }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(url, json=payload)
+
+    if resp.status_code != 200:
+        log.warning("Telegram API returned status %d", resp.status_code)
+
+
 async def send_telegram_with_lift_buttons(
     message: str,
     key_id: str,
@@ -53,8 +92,9 @@ async def send_telegram_with_lift_buttons(
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         return
 
-    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    api_url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
 
+    # callback_data buttons → in-app one-tap via the Telegram long-polling client.
     row = [
         {"text": "💸 Lift 2× today", "callback_data": f"lift|{key_id}|2x"},
         {"text": "🚀 To ceiling", "callback_data": f"lift|{key_id}|ceiling"},
@@ -71,7 +111,7 @@ async def send_telegram_with_lift_buttons(
     }
 
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(url, json=payload)
+        resp = await client.post(api_url, json=payload)
 
     if resp.status_code != 200:
         log.warning("Telegram API returned status %d", resp.status_code)

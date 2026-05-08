@@ -56,6 +56,15 @@ class Settings(BaseSettings):
 
     # ── Alert channels ────────────────────────────────────────────────────────
     slack_webhook_url: str = ""
+    # Optional Socket Mode app-level token (xapp-...). When set, Tourniquet
+    # opens a WebSocket to Slack so inline button taps apply in-app — no
+    # public HTTPS callback URL needed. Setup steps in docs/alerts-setup.md.
+    slack_app_token: str = ""
+    # Bot User OAuth Token (xoxb-...) and channel/DM ID — required alongside
+    # slack_app_token to enable in-app one-tap via Block Kit + Socket Mode.
+    # Without these, Slack stays on the webhook + mrkdwn-link fallback.
+    slack_bot_token: str = ""
+    slack_channel_id: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     alert_webhook_url: str = ""

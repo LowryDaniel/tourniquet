@@ -147,3 +147,38 @@ class CapToday(Base):
     total_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     api_key: Mapped[ApiKey] = relationship("ApiKey", back_populates="cap_today")
+
+
+class ApiKeyAction(Base):
+    """Audit log of cap-changing actions per key.
+
+    Every kill / lift / bump / manual cap-change writes one row here. Powers
+    the per-key "Action history" tab on the dashboard so operators can see
+    what happened, when, and from which channel — even when the resulting
+    cap value didn't visibly change (e.g. killing a key that was already
+    at minimum).
+
+    Field semantics:
+      action:   kill_now | lift_by_amount | lift_mode | cap_set |
+                recovery_offered | alert_fired
+      source:   slack_socket | telegram_poll | web | cli | proxy | auto
+      summary:  one-line human-readable description shown in the UI
+      details:  optional structured payload (cap_before, cap_after, mode,
+                amount_cents, today_spend_cents, etc.) for diagnostics
+    """
+
+    __tablename__ = "api_key_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True,
+    )
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    api_key: Mapped[ApiKey] = relationship("ApiKey")

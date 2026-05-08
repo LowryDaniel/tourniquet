@@ -38,6 +38,8 @@ class AlertEvent:
     today: date
     api_key_id: str = ""      # UUID string — used for Telegram lift buttons
     kill_now_url: str | None = None   # signed magic-link; set when kill_enabled=False
+    alert_email: str | None = None    # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
+    recovery_offer: bool = False      # True when this alert is a "killed, want to bump?" recovery prompt
 
 
 def _build_kill_now_url(key_id: str) -> str:
@@ -48,23 +50,66 @@ def _build_kill_now_url(key_id: str) -> str:
     return f"{settings.app_base_url}/admin/kill-now/{key_id}?token={token}"
 
 
+def _build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
+    """Return a signed 24h-expiry lift-by-amount URL.
+
+    Token encodes (key_id, amount_cents) so it can't be replayed for a different
+    amount. Each amount option = different signed link.
+    """
+    from itsdangerous import URLSafeTimedSerializer
+    s = URLSafeTimedSerializer(settings.secret_key, salt="lift-by-amount")
+    token = s.dumps([key_id, amount_cents])
+    return f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
+
+
+def recovery_amounts_cents(cap_cents: int) -> list[int]:
+    """Return 3 sensible recovery-bump amounts (in cents) given today's cap.
+
+    Scales with cap magnitude — a $5 cap offers +$1/+$5/+$10; a $1000 cap
+    offers +$25/+$100/+$500. Same scaling logic as the dashboard nudge buttons.
+    """
+    if cap_cents <= 1000:        # ≤ $10
+        return [100, 500, 1000]    # +$1   +$5   +$10
+    if cap_cents <= 10000:       # ≤ $100
+        return [500, 2500, 10000]  # +$5   +$25  +$100
+    if cap_cents <= 100000:      # ≤ $1000
+        return [2500, 10000, 50000]
+    return [10000, 50000, 100000]
+
+
+def _format_money_cents(cents: int) -> str:
+    """Compact dollar formatting for button labels — no decimals on round amounts."""
+    if cents % 100 == 0:
+        return f"${cents // 100}"
+    return f"${cents / 100:.2f}"
+
+
 def _format_message(event: AlertEvent) -> str:
+    """Single canonical alert template — same shape for every threshold and channel.
+
+    Pattern:    {icon} Tourniquet: {name} — {state}. {spent}/{cap} today.
+    Action verbs live in the buttons, not the prose. Don't tweak the wording —
+    consistency across alerts is more valuable than clever phrasing.
+    """
     spent = format_money(event.spent_usd_cents, event.display_currency)
     cap = format_money(event.cap_usd_cents, event.display_currency)
 
-    if event.threshold_pct == -1:
+    if event.recovery_offer:
         return (
-            f"\U0001f6d1 Tourniquet: {event.api_key_name} cap reached — "
-            f"{spent}/{cap} today, requests now blocked"
+            f"🛑 Tourniquet: {event.api_key_name} — killed. "
+            f"{spent}/{cap} today. Bump cap to continue?"
         )
 
-    base = (
-        f"⚠️ Tourniquet: {event.api_key_name} at {event.threshold_pct}% — "
-        f"{spent} of {cap} today"
+    if event.threshold_pct == -1:
+        return (
+            f"🛑 Tourniquet: {event.api_key_name} — cap reached. "
+            f"{spent}/{cap} today. Requests blocked."
+        )
+
+    return (
+        f"⚠️ Tourniquet: {event.api_key_name} — at {event.threshold_pct}%. "
+        f"{spent}/{cap} today."
     )
-    if event.kill_now_url:
-        base += ". Click 🛑 to kill now."
-    return base
 
 
 async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, str]:
@@ -83,17 +128,25 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     from tourniquet.alerts.email import send_email
     from tourniquet.alerts.jsonl_log import write_jsonl
     from tourniquet.alerts.slack import send_slack
-    from tourniquet.alerts.telegram import send_telegram, send_telegram_with_lift_buttons
+    from tourniquet.alerts.telegram import (
+        send_telegram,
+        send_telegram_recovery_offer,
+        send_telegram_with_lift_buttons,
+    )
     from tourniquet.alerts.webhook import send_webhook
 
-    # Attach kill-now URL when kill is disabled (monitor mode)
-    if not kill_enabled and event.api_key_id and event.kill_now_url is None:
+    # Always attach kill-now URL — every alert should have a one-click escape.
+    # When kill_enabled=True the proxy will block at 100% anyway, but the user
+    # might want to slam the brake early (50/80%) or lock down post-hit.
+    # When kill_enabled=False (monitor) it's the only enforcement mechanism.
+    if event.api_key_id and event.kill_now_url is None:
         event = dataclasses.replace(event, kill_now_url=_build_kill_now_url(event.api_key_id))
 
     message = _format_message(event)
 
-    # Threshold >= 80 or cap-hit (-1) → send lift buttons on Telegram
-    wants_lift_buttons = event.threshold_pct == -1 or event.threshold_pct >= 80
+    # Send Telegram with inline buttons whenever the kill-now URL is available
+    # (which is always, post-fix). User wants kill option on every alert.
+    wants_lift_buttons = event.kill_now_url is not None or event.api_key_id != ""
 
     # Build task list: (channel_name, coroutine | None)
     # None means "skip" — we know before dispatching it won't do anything.
@@ -128,9 +181,13 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     else:
         tasks.append(("slack", False))
 
-    # Telegram — use lift buttons for >= 80% or cap-hit
+    # Telegram — recovery_offer takes precedence (one-tap bump buttons),
+    # else lift buttons for >= 80% or cap-hit, else plain text.
     if settings.telegram_bot_token and settings.telegram_chat_id:
-        if wants_lift_buttons and event.api_key_id:
+        if event.recovery_offer and event.api_key_id:
+            amounts = recovery_amounts_cents(event.cap_usd_cents)
+            coroutines.append(_run("telegram", send_telegram_recovery_offer(message, event.api_key_id, amounts)))
+        elif wants_lift_buttons and event.api_key_id:
             coroutines.append(_run("telegram", send_telegram_with_lift_buttons(message, event.api_key_id, event.kill_now_url)))
         else:
             coroutines.append(_run("telegram", send_telegram(message)))
@@ -143,8 +200,13 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     else:
         tasks.append(("webhook", False))
 
-    # Email — always attempt; send_email is a no-op if RESEND_API_KEY unset
-    coroutines.append(_run("email", send_email(message, event)))
+    # Email — only dispatch when creds are configured. Reports skipped:no-config
+    # otherwise (was previously silently no-op'ing inside send_email and
+    # falsely reporting "sent" to the dispatcher).
+    if settings.resend_api_key and settings.resend_from_email:
+        coroutines.append(_run("email", send_email(message, event)))
+    else:
+        tasks.append(("email", False))
 
     results_list = await asyncio.gather(*coroutines, return_exceptions=True)
 

@@ -31,7 +31,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if settings.sentry_dsn:
         sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
-    yield
+
+    # Auto-start Telegram polling so inline buttons work in-app without a webhook
+    from tourniquet.alerts.telegram_poller import poller as telegram_poller
+    await telegram_poller.start()
+
+    # Auto-start Slack Socket Mode so inline buttons work in-app without an HTTPS callback URL
+    from tourniquet.alerts.slack_socket import socket_client as slack_socket_client
+    await slack_socket_client.start()
+
+    try:
+        yield
+    finally:
+        await telegram_poller.stop()
+        await slack_socket_client.stop()
 
 
 def create_app() -> FastAPI:

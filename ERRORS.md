@@ -1,5 +1,96 @@
 # Errors & fixes
 
+## 2026-05-08 — Kill-now permanently destroyed the user's configured daily_cap
+
+**What failed:** Tapping "🛑 Kill now" from any channel (Slack/Telegram/web) clamped `daily_cap_usd_cents` to today's spend (or 1¢ when spend was 0). The clamp was permanent — `daily_cap` is the persistent baseline, so tomorrow's quota was also destroyed. Dan flagged it after his Test_1 key got stuck at $0.01: he'd configured $1, killed it during testing, and couldn't understand why it had become 1¢ until I traced the kill chain.
+
+**Root cause:** `_apply_kill_now` mutated the wrong field. `lifted_cap_usd_cents` exists exactly for "today-only override that auto-expires at midnight UTC" (see `proxy/router.py::_effective_cap`). The kill should write the lift, not the baseline. The original implementation got this backwards.
+
+**Fix:** `_apply_kill_now` now writes `lifted_cap_usd_cents = max(today_spend, 1)` and sets `lift_expires_at` to next midnight UTC. `daily_cap_usd_cents` is intentionally untouched. The proxy's effective-cap function honours the lift while it's active, so today's requests are blocked. Tomorrow at 00:00 UTC the lift expires and `daily_cap` resumes — no manual intervention needed to "restart" the key.
+
+**Files touched:** `src/tourniquet/routes/admin.py` (rewrote `_apply_kill_now`), `tests/test_admin_kill_now.py` (renamed both test cases + updated assertions to expect lifted-cap behaviour and an untouched daily_cap).
+
+**Side note:** Audit log row for the kill now describes both fields explicitly: "lifted_cap clamped to $4.20 until midnight UTC; daily_cap preserved at $10.00" — so even if a future regression happens, the audit row makes it obvious.
+
+## 2026-05-08 — Slack `chat.postMessage` returns `invalid_blocks` on Block Kit actions block
+
+**What failed:** Bot-post mode was wired up correctly (xoxb token + channel ID present, payload reaching `chat.postMessage`), but Slack rejected every alert with `invalid_blocks`. CLI dispatcher reported `✅ slack delivered` (false positive — see follow-up).
+
+**Root cause:** Two buttons in the standard alert (`💸 Lift 2× today` and `🚀 To ceiling`) both used `action_id: "lift"`. Slack's Block Kit spec requires action_ids to be unique within an `actions` block; duplicates trigger `invalid_blocks`. Recovery alerts had the same shape with three `lift_by_amount` buttons.
+
+**Fix:** Gave each button a unique `action_id` (`lift_2x`, `lift_ceiling`, `lift_by_amount_<cents>`) and switched the Socket Mode dispatcher to prefix-match (`startswith("lift_by_amount")`, `startswith("lift_")`). Routing payload still travels in `value` so the dispatch logic itself didn't change.
+
+**Files touched:** `src/tourniquet/alerts/slack.py` (`_build_action_payload`), `src/tourniquet/alerts/slack_socket.py` (`_handle_interactive`), `tests/test_slack_socket.py` (3 cases updated to assert prefix + uniqueness).
+
+**Follow-up (also fixed in same commit):** `_send_via_bot()` previously only logged a warning when Slack returned `ok: false` — the CLI dispatcher reported `✅ delivered` for failures. Now raises `RuntimeError("slack chat.postMessage failed: <reason>")` so failures surface as `❌ slack <reason>` to the operator.
+
+## 2026-05-07 — Slack incoming webhook returns 400 on Block Kit `actions` blocks
+
+**What failed:** When `SLACK_APP_TOKEN` was set, `slack.py` started rendering payloads with Block Kit `actions` blocks (button rows with `action_id` + `value`) so Socket Mode could deliver taps. The webhook `POST` returned `400` and no message was delivered.
+
+**Root cause:** Slack's incoming webhooks only accept `text` and a subset of Block Kit (sections, dividers, headers, context, image). They explicitly reject `actions` blocks because interactive components need to be posted by a Bot User via `chat.postMessage`. The xapp-token (app-level) authorises Socket Mode receive only — it doesn't authorise sending bot messages.
+
+**Fix:** Gate the Block Kit code path on three things being true: `SLACK_APP_TOKEN` AND `SLACK_BOT_TOKEN` AND `SLACK_CHANNEL_ID`. When only the first is set, the renderer falls back to mrkdwn link payloads (which webhooks accept) and the Socket Mode client stays dormant ("Slack Socket Mode dormant — SLACK_APP_TOKEN set but SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing").
+
+**Files touched:** `src/tourniquet/alerts/slack.py` (gate), `src/tourniquet/alerts/slack_socket.py` (dormant gate), `src/tourniquet/config.py` (new `slack_bot_token`, `slack_channel_id`).
+
+**Follow-up (v0.2):** Implement `chat.postMessage` send path so when bot token + channel ID are provided, alerts post via the bot and Block Kit action buttons drive in-app one-tap via the existing Socket Mode handler. Setup guide section in `docs/alerts-setup.md` already lists the four Slack-side actions the user takes.
+
+## 2026-05-07 — Slack Socket Mode WebSocket fails with CERTIFICATE_VERIFY_FAILED on Python.org Python
+
+**What failed:** With `SLACK_APP_TOKEN=xapp-...` set, the Socket Mode client successfully fetched the wss URL via `apps.connections.open` but raised `[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1002)` when calling `websockets.connect(ws_url)`. Reconnect loop spammed the log every 2/4/8/16/32s.
+
+**Root cause:** Python.org's Python builds for macOS ship without bootstrapping the system CA store; you'd normally run the `Install Certificates.command` shipped with the installer. `httpx` works around this by using `certifi.where()` as the default cafile — but `websockets` uses the standard library's empty default SSL context.
+
+**Fix:** Build an explicit SSL context backed by certifi and pass it to `websockets.connect`:
+```python
+import ssl, certifi
+ssl_context = ssl.create_default_context(cafile=certifi.where())
+async with websockets.connect(ws_url, ssl=ssl_context, ...) as ws:
+```
+
+**Files touched:** `src/tourniquet/alerts/slack_socket.py` — added `_ssl_context()` helper, threaded through.
+
+**Follow-up:** Will affect any other WebSocket / TLS code we add. Helper is reusable. Worth a startup check that prints "Run `Install Certificates.command` if Python.org Python on macOS" if certifi import fails.
+
+## 2026-05-07 — Alerts subsystem never invoked from production code path 🚨 LAUNCH BLOCKER
+
+**What failed:** During AFK alert-channel testing I discovered `fan_out` is only called from the new `tourniquet test-alerts` CLI subcommand. Search across the codebase for callers:
+```
+$ grep -rn "fan_out(" src/tourniquet --include="*.py" | grep -v "notifier.py:"
+src/tourniquet/cli.py:404:    results = asyncio.run(fan_out(event, kill_enabled=not args.monitor))
+```
+That's it. The proxy records spend (`add_spend(...)` in `proxy/router.py`) but never crosses thresholds → alerts → fan_out. Every alert channel works correctly when invoked, but in production no alerts ever fire.
+
+**Root cause:** Threshold-detection logic was never wired into the `/v1/messages` post-processing path. `triggers/evaluator.py` defines `spend_threshold_pct` as a condition type but no caller exists.
+
+**Fix (required before launch):**
+1. After `add_spend(...)` in `proxy/router.py` (both streaming `_generate` epilogue and non-streaming branch), compute `today_spent_pct = spent_after / cap * 100` (use `lifted_cap_usd_cents` if active, else `daily_cap_usd_cents`).
+2. Determine which thresholds (50, 80, 100) the request just crossed. Need state to avoid re-firing — simplest: add `alerts_fired_today: list[int]` JSON column on `daily_spend` table OR last-fired-pct integer on `api_keys` row reset at midnight UTC.
+3. For each newly-crossed threshold, build `AlertEvent` and `await fan_out(event, kill_enabled=key.kill_enabled)`. Pass `key.alert_email` into the event.
+4. For cap-hit specifically: fire when the cap-injection actually triggers (streaming path's `cap_was_hit=True` branch + non-streaming pre-flight 402 branch).
+
+Estimated effort: 30-60min. This is the single highest-priority fix before any public launch — the entire alerts-channel feature is dead code without it.
+
+**Files to touch:** `src/tourniquet/proxy/router.py` (call site), `src/tourniquet/models.py` (idempotency state column), and an integration test that asserts `fan_out` is called when 80% is crossed.
+
+## 2026-05-07 — Email channel falsely reported "sent" with no creds
+
+**What failed:** `tourniquet test-alerts` reported `email: ✅ delivered` with `RESEND_API_KEY=` empty. Should have reported `skipped:no-config`.
+
+**Root cause:** `alerts/email.py:send_email` returned silently (`if not settings.resend_api_key: return`) without raising. The dispatcher treated a non-raising coroutine as success → "sent". Pattern was inconsistent with slack/telegram/webhook which were credential-checked in the dispatcher upstream.
+
+**Fix:** Move the credential check into `notifier.py:fan_out`. Email dispatch now matches the slack/telegram/webhook pattern:
+```python
+if settings.resend_api_key and settings.resend_from_email:
+    coroutines.append(_run("email", send_email(message, event)))
+else:
+    tasks.append(("email", False))
+```
+Plus: replaced placeholder recipient (`[settings.resend_from_email]`) with `getattr(event, "alert_email", None) or settings.resend_from_email`. New `alert_email` field on `AlertEvent`. Three new tests in `tests/test_notifier.py`. 17/17 notifier tests pass; 147/150 full-suite (3 unrelated skips).
+
+**Files touched:** `src/tourniquet/alerts/notifier.py`, `src/tourniquet/alerts/email.py`, `tests/test_notifier.py`.
+
 ## 2026-05-07 — Non-streaming `/v1/messages` requests bypassed accounting
 
 **What failed:** First real-traffic smoke test through the proxy. Anthropic returned the response (so passthrough worked), but Tourniquet recorded `model=unknown, input=0, output=0, cost=0¢`. Multiple requests would silently bypass the cap entirely.

@@ -160,10 +160,12 @@ def test_post_kill_now_bad_token_returns_400():
     assert resp.status_code == 400
 
 
-# ── _apply_kill_now sets kill_enabled=True and clamps cap ─────────────────────
+# ── _apply_kill_now writes lifted_cap and PRESERVES daily_cap ─────────────────
+# (Killing must not destroy the user's baseline daily cap — the kill is a
+#  today-only override that auto-expires at midnight UTC.)
 
 @pytest.mark.asyncio
-async def test_apply_kill_now_sets_fields():
+async def test_apply_kill_now_sets_lifted_cap_and_preserves_daily_cap():
     from tourniquet.routes.admin import _apply_kill_now
 
     key_id = uuid.uuid4()
@@ -171,7 +173,8 @@ async def test_apply_kill_now_sets_fields():
     mock_key.id = key_id
     mock_key.name = "test-key"
     mock_key.kill_enabled = False
-    mock_key.daily_cap_usd_cents = 1000
+    mock_key.daily_cap_usd_cents = 1000  # $10 baseline
+    mock_key.lifted_cap_usd_cents = None  # no active lift before the kill
 
     from contextlib import asynccontextmanager
 
@@ -189,14 +192,19 @@ async def test_apply_kill_now_sets_fields():
         name, new_cap = await _apply_kill_now(key_id)
 
     assert mock_key.kill_enabled is True
-    assert mock_key.daily_cap_usd_cents == 420  # clamped to today's spend
+    # Kill clamps the LIFTED cap to today's spend ($4.20)
+    assert mock_key.lifted_cap_usd_cents == 420
+    # The daily_cap baseline is intentionally untouched — survives until tomorrow
+    assert mock_key.daily_cap_usd_cents == 1000
+    # lift_expires_at is set so the kill auto-clears at midnight UTC
+    assert mock_key.lift_expires_at is not None
     assert new_cap == 420
     assert name == "test-key"
 
 
 @pytest.mark.asyncio
-async def test_apply_kill_now_zero_spend_clamps_to_one():
-    """Spend of 0 must not set cap to 0 — clamp to 1."""
+async def test_apply_kill_now_zero_spend_floors_lifted_at_one_cent():
+    """Spend of 0 must floor lifted_cap at 1¢ (avoid div-by-zero downstream)."""
     from tourniquet.routes.admin import _apply_kill_now
 
     key_id = uuid.uuid4()
@@ -205,6 +213,7 @@ async def test_apply_kill_now_zero_spend_clamps_to_one():
     mock_key.name = "test-key"
     mock_key.kill_enabled = False
     mock_key.daily_cap_usd_cents = 1000
+    mock_key.lifted_cap_usd_cents = None
 
     from contextlib import asynccontextmanager
 
@@ -223,4 +232,6 @@ async def test_apply_kill_now_zero_spend_clamps_to_one():
 
     assert mock_key.kill_enabled is True
     assert new_cap == 1
-    assert mock_key.daily_cap_usd_cents == 1
+    assert mock_key.lifted_cap_usd_cents == 1
+    # daily_cap untouched — restored automatically tomorrow
+    assert mock_key.daily_cap_usd_cents == 1000

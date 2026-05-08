@@ -7,6 +7,8 @@ Usage:
     tourniquet add-key    # interactive key add
     tourniquet status     # list keys with today's spend
     tourniquet lift KEY   # lift key cap
+    tourniquet test       # send a real test request through the proxy
+    tourniquet test-alerts  # fire synthetic alert through all channels
     tourniquet --version  # print version
 """
 
@@ -33,6 +35,33 @@ def _generate_fernet_key() -> str:
 
 def _generate_secret_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode()
+
+
+def _lookup_key_by_name(name: str):
+    """Look up an ApiKey by exact name. Returns None if not found.
+
+    Used by `test-alerts --key NAME` to bind the synthetic alert to a real
+    key — so the alert message shows that key's actual cap, and in-app taps
+    persist back to its `lifted_cap_usd_cents`. Without this, --key only
+    affects the human-readable label.
+    """
+    import asyncio as _asyncio
+
+    from sqlalchemy import select
+
+    from tourniquet.db import get_session
+    from tourniquet.models import ApiKey
+
+    async def _run():
+        async with get_session() as s:
+            return (
+                await s.execute(select(ApiKey).where(ApiKey.name == name))
+            ).scalar_one_or_none()
+
+    try:
+        return _asyncio.run(_run())
+    except Exception:
+        return None
 
 
 def _patch_env_value(lines: list[str], key: str, generator) -> tuple[list[str], bool]:
@@ -347,6 +376,130 @@ def cmd_test(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_test_alerts(args: argparse.Namespace) -> None:
+    """Fire a synthetic alert through every configured channel and report status.
+
+    Use this to verify your alert setup without burning real tokens. The event
+    is clearly labelled [TEST] so anyone seeing it knows it's a smoke check.
+    """
+    import asyncio
+    from datetime import date
+
+    from tourniquet.alerts.notifier import AlertEvent, fan_out
+    from tourniquet.config import settings
+
+    # Force-enable desktop for this test only (overrides .env without touching it)
+    if args.enable_desktop:
+        settings.enable_desktop_notifications = "true"
+        settings.enable_mac_notifications = "true"
+
+    threshold_map = {"50": 50, "80": 80, "100": 100, "cap-hit": -1}
+    threshold = threshold_map.get(args.threshold, 80)
+
+    # Try to bind to the real key — gives the alert the correct cap and a real
+    # key_id so in-app one-tap actually mutates that key's lifted_cap. Falls
+    # back to a synthetic event if the named key isn't in the DB.
+    real_key = _lookup_key_by_name(args.key)
+    if real_key is not None:
+        cap_cents = real_key.daily_cap_usd_cents or 100
+        api_key_id = str(real_key.id)
+        api_key_name = f"[TEST] {real_key.name}"
+        bind_note = f"bound to real key '{real_key.name}' (cap ${cap_cents/100:.2f})"
+    else:
+        cap_cents = 500
+        api_key_id = "00000000-0000-0000-0000-000000000000"
+        api_key_name = f"[TEST] {args.key}"
+        bind_note = f"synthetic (no key named '{args.key}' — taps won't persist)"
+
+    spent_cents = cap_cents if threshold == -1 else int(cap_cents * threshold / 100)
+
+    event = AlertEvent(
+        api_key_name=api_key_name,
+        threshold_pct=threshold,
+        spent_usd_cents=spent_cents,
+        cap_usd_cents=cap_cents,
+        display_currency=settings.display_currency,
+        today=date.today(),
+        api_key_id=api_key_id,
+        recovery_offer=args.recovery,
+    )
+
+    is_tty = sys.stdout.isatty()
+    GREEN = "\033[32m" if is_tty else ""
+    RED = "\033[31m" if is_tty else ""
+    DIM = "\033[2m" if is_tty else ""
+    BOLD = "\033[1m" if is_tty else ""
+    RESET = "\033[0m" if is_tty else ""
+
+    label = "cap-hit" if threshold == -1 else f"{threshold}%"
+    monitor_str = (
+        "monitor mode (kill_enabled=False, kill-now URL embedded)"
+        if args.monitor
+        else "standard (kill_enabled=True)"
+    )
+    print()
+    print(f"🧪 {BOLD}Tourniquet test-alerts{RESET}")
+    print(f"   Key:        {api_key_name}")
+    print(f"   Binding:    {bind_note}")
+    print(f"   Threshold:  {label}")
+    print(f"   Mode:       {monitor_str}")
+    print()
+
+    results = asyncio.run(fan_out(event, kill_enabled=not args.monitor))
+
+    channel_order = ["jsonl", "desktop", "slack", "telegram", "email", "webhook"]
+    width = max(len(c) for c in channel_order)
+    print(f"  {BOLD}Channel{RESET}      {BOLD}Status{RESET}")
+    for ch in channel_order:
+        status = results.get(ch, "skipped:no-config")
+        if status == "sent":
+            icon, note = GREEN + "✅" + RESET, "delivered"
+        elif status.startswith("error:"):
+            icon, note = RED + "❌" + RESET, status[6:][:80]
+        else:
+            icon, note = DIM + "—" + RESET, "not configured"
+        print(f"  {icon}  {ch:<{width}}  {note}")
+    print()
+
+    skipped = [c for c, v in results.items() if v == "skipped:no-config"]
+    if skipped:
+        print(f"  {BOLD}To enable skipped channels{RESET} — add to {DIM}~/.tourniquet/.env{RESET}:")
+        print()
+        if "desktop" in skipped:
+            print(f"    {BOLD}desktop{RESET} (Mac/Win/Linux banner notifications)")
+            print(f"      ENABLE_MAC_NOTIFICATIONS=true")
+            print(f"      MAC_NOTIFICATION_STYLE=both     {DIM}text | action | both{RESET}")
+            print()
+        if "slack" in skipped:
+            print(f"    {BOLD}slack{RESET}")
+            print(f"      SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...")
+            print(f"      {DIM}create at https://api.slack.com/apps → Incoming Webhooks{RESET}")
+            print()
+        if "telegram" in skipped:
+            print(f"    {BOLD}telegram{RESET}")
+            print(f"      TELEGRAM_BOT_TOKEN=123456:ABC...")
+            print(f"      TELEGRAM_CHAT_ID=987654")
+            print(f"      {DIM}bot token: chat @BotFather → /newbot{RESET}")
+            print(f"      {DIM}chat id:   chat @userinfobot → it replies with your id{RESET}")
+            print()
+        if "webhook" in skipped:
+            print(f"    {BOLD}webhook{RESET} (generic — Zapier/n8n/Home Assistant)")
+            print(f"      ALERT_WEBHOOK_URL=https://hooks.zapier.com/...")
+            print()
+        if "email" in skipped:
+            print(f"    {BOLD}email{RESET} (Resend)")
+            print(f"      RESEND_API_KEY=re_...")
+            print(f"      RESEND_FROM_EMAIL=alerts@yourdomain.com")
+            print(f"      {DIM}free tier at resend.com — domain must be verified{RESET}")
+            print(f"      {DIM}per-key alert_email also needs setting in the dashboard{RESET}")
+            print()
+        print(f"  Then run {BOLD}tourniquet test-alerts{RESET} again.")
+        print()
+    else:
+        print(f"  {GREEN}All configured channels delivered.{RESET}")
+        print()
+
+
 def cmd_lift(args: argparse.Namespace) -> None:
     import asyncio
     from datetime import date, datetime, timedelta, timezone
@@ -425,6 +578,38 @@ def main() -> None:
     p_test.add_argument("--message", default="say hi in 5 words", help="Prompt content")
     p_test.add_argument("--model", default="claude-haiku-4-5-20251001", help="Model ID")
 
+    # test-alerts — fire synthetic alert through all configured channels
+    p_test_alerts = sub.add_parser(
+        "test-alerts",
+        help="Fire a synthetic alert through every configured channel",
+    )
+    p_test_alerts.add_argument(
+        "--threshold",
+        choices=["50", "80", "100", "cap-hit"],
+        default="80",
+        help="Threshold to simulate (default: 80)",
+    )
+    p_test_alerts.add_argument(
+        "--key",
+        default="ojw-swarm",
+        help="Key name to embed in the message (default: ojw-swarm)",
+    )
+    p_test_alerts.add_argument(
+        "--monitor",
+        action="store_true",
+        help="Simulate monitor mode (kill_enabled=False) — adds kill-now URL",
+    )
+    p_test_alerts.add_argument(
+        "--enable-desktop",
+        action="store_true",
+        help="Force-enable desktop notifications for this test only",
+    )
+    p_test_alerts.add_argument(
+        "--recovery",
+        action="store_true",
+        help="Send a recovery-offer alert (post-kill 'want to bump?' prompt with +$N buttons)",
+    )
+
     # register-url-handler
     sub.add_parser(
         "register-url-handler",
@@ -451,6 +636,7 @@ def main() -> None:
         "status": cmd_status,
         "lift": cmd_lift,
         "test": cmd_test,
+        "test-alerts": cmd_test_alerts,
         "register-url-handler": cmd_register_url_handler,
         "handle-url": cmd_handle_url,
     }

@@ -281,11 +281,26 @@ def test_kill_now_url_omitted_when_kill_enabled():
     assert event.kill_now_url is None
 
 
-def test_format_message_includes_kill_hint_when_url_set():
-    """_format_message appends a kill hint when kill_now_url is present."""
+def test_format_message_text_is_consistent_regardless_of_kill_url():
+    """Locked-in contract: the message text NEVER varies based on kill_now_url.
+
+    Action prompts ('Kill now', '+$5' etc) live in the channel-rendered button
+    rows, not in the message prose. This keeps the canonical alert text
+    identical across every delivery method (Slack/Telegram/email/desktop/JSONL).
+    """
     from tourniquet.alerts.notifier import _format_message, AlertEvent
 
-    event = AlertEvent(
+    base = AlertEvent(
+        api_key_name="ojw-swarm",
+        threshold_pct=80,
+        spent_usd_cents=420,
+        cap_usd_cents=500,
+        display_currency="GBP",
+        today=date(2026, 5, 6),
+    )
+    msg_no_url = _format_message(base)
+
+    with_url = AlertEvent(
         api_key_name="ojw-swarm",
         threshold_pct=80,
         spent_usd_cents=420,
@@ -294,9 +309,11 @@ def test_format_message_includes_kill_hint_when_url_set():
         today=date(2026, 5, 6),
         kill_now_url="https://example.com/kill-now",
     )
-    msg = _format_message(event)
-    assert "🛑" in msg
-    assert "kill now" in msg.lower()
+    msg_with_url = _format_message(with_url)
+
+    assert msg_no_url == msg_with_url, (
+        "Message text must not vary based on kill_now_url — buttons handle action prompts"
+    )
 
 
 def test_format_message_no_kill_hint_without_url():
@@ -313,6 +330,90 @@ def test_format_message_no_kill_hint_without_url():
     )
     msg = _format_message(event)
     assert "kill now" not in msg.lower()
+
+
+# ── Email channel: skipped when no creds, called when configured ──────────────
+
+@pytest.mark.asyncio
+async def test_email_reports_skipped_when_no_creds(
+    base_event: AlertEvent, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: email used to silently no-op and falsely report 'sent'.
+
+    With creds empty the dispatcher must report 'skipped:no-config', matching
+    the behaviour of slack/telegram/webhook.
+    """
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+    with (
+        patch("tourniquet.config.settings.slack_webhook_url", ""),
+        patch("tourniquet.config.settings.telegram_bot_token", ""),
+        patch("tourniquet.config.settings.telegram_chat_id", ""),
+        patch("tourniquet.config.settings.alert_webhook_url", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
+        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.resend_api_key", ""),
+    ):
+        results = await fan_out(base_event)
+
+    assert results["email"] == "skipped:no-config"
+
+
+@pytest.mark.asyncio
+async def test_email_dispatched_when_creds_present(
+    base_event: AlertEvent, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When RESEND_API_KEY + RESEND_FROM_EMAIL are set, email is dispatched."""
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+    mock_send = MagicMock()
+    with (
+        patch("tourniquet.config.settings.slack_webhook_url", ""),
+        patch("tourniquet.config.settings.telegram_bot_token", ""),
+        patch("tourniquet.config.settings.telegram_chat_id", ""),
+        patch("tourniquet.config.settings.alert_webhook_url", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
+        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.resend_api_key", "re_fake"),
+        patch("tourniquet.config.settings.resend_from_email", "alerts@example.com"),
+        patch("resend.Emails.send", mock_send),
+    ):
+        results = await fan_out(base_event)
+
+    assert results["email"] == "sent"
+    mock_send.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_email_uses_per_key_alert_email_when_set(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If event.alert_email is set, email goes to that recipient (not the from-address)."""
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+    event = AlertEvent(
+        api_key_name="ojw-swarm",
+        threshold_pct=80,
+        spent_usd_cents=420,
+        cap_usd_cents=500,
+        display_currency="GBP",
+        today=date(2026, 5, 6),
+        alert_email="user@example.com",
+    )
+    mock_send = MagicMock()
+    with (
+        patch("tourniquet.config.settings.slack_webhook_url", ""),
+        patch("tourniquet.config.settings.telegram_bot_token", ""),
+        patch("tourniquet.config.settings.telegram_chat_id", ""),
+        patch("tourniquet.config.settings.alert_webhook_url", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
+        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.resend_api_key", "re_fake"),
+        patch("tourniquet.config.settings.resend_from_email", "alerts@example.com"),
+        patch("resend.Emails.send", mock_send),
+    ):
+        await fan_out(event)
+
+    payload = mock_send.call_args[0][0]
+    assert payload["to"] == ["user@example.com"]
+    assert payload["from"] == "alerts@example.com"
 
 
 # ── Webhook URL never appears in logs ─────────────────────────────────────────

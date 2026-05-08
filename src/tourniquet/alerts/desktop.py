@@ -32,29 +32,22 @@ def _notifications_enabled() -> bool:
 
 
 def _build_message(message: str, event: object | None) -> str:
-    """Optionally append lift URL / CLI command based on mac_notification_style."""
-    style = getattr(settings, "mac_notification_style", "both")
-    key_id: str | None = None
-    key_name: str | None = None
+    """Return the canonical message + ONE consistent action line.
 
-    if event is not None:
-        key_id = getattr(event, "api_key_id", None) or None
-        key_name = getattr(event, "api_key_name", None) or None
+    macOS notification banners can't host inline buttons, so we append a single
+    dashboard URL — same shape on every alert. The dashboard is where all
+    actions (lift / kill / bump) live, so this single appendix is enough.
 
-    if style != "text" and key_id:
-        lift_url = f"tourniquet://lift/{key_id}"
-        cli_cmd = f"python scripts/manage_keys.py lift {key_name or key_id}"
-        if style == "action":
-            message = f"{message}\n{lift_url}"
-        else:  # "both"
-            message = f"{message}\n{lift_url}\n{cli_cmd}"
-
-    # Append kill-now URL when kill_enabled is False (monitor mode)
-    kill_now_url: str | None = getattr(event, "kill_now_url", None) if event is not None else None
-    if kill_now_url:
-        message = f"{message}\n🛑 Kill now: {kill_now_url}"
-
-    return message
+    The body text itself is NEVER modified — it must match what Slack/Telegram/
+    JSONL/email show, character for character.
+    """
+    if event is None:
+        return message
+    key_id = getattr(event, "api_key_id", None) or None
+    if not key_id:
+        return message
+    dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
+    return f"{message}\n→ {dashboard_url}"
 
 
 async def send_desktop_notification(

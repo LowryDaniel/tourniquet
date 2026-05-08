@@ -1,0 +1,50 @@
+<div class="action-history"
+     id="action-history-{{ key_id }}"
+     hx-get="/dashboard/key/{{ key_id }}/history"
+     hx-trigger="every 10s"
+     hx-swap="outerHTML">
+
+  <h3 class="section-heading">Action history (last 50)</h3>
+
+  {% if action_history %}
+  <table class="alert-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Action</th>
+        <th>From</th>
+        <th>What happened</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in action_history %}
+      <tr>
+        <td>{{ a.ts.strftime('%Y-%m-%d %H:%M:%S') if a.ts else '—' }}</td>
+        <td>
+          {% if a.action == 'kill_now' %}🛑 kill
+          {% elif a.action == 'lift_by_amount' %}💸 bump
+          {% elif a.action == 'lift_mode' %}🚀 lift
+          {% elif a.action == 'cap_set' %}⚙️ cap-set
+          {% elif a.action == 'recovery_offered' %}🔁 recovery
+          {% elif a.action == 'alert_fired' %}🔔 alert
+          {% else %}{{ a.action }}{% endif %}
+        </td>
+        <td>
+          {% if a.source == 'slack_socket' %}Slack
+          {% elif a.source == 'telegram_poll' %}Telegram
+          {% elif a.source == 'web' %}Web
+          {% elif a.source == 'cli' %}CLI
+          {% elif a.source == 'proxy' %}Proxy
+          {% elif a.source == 'auto' %}Auto
+          {% else %}{{ a.source }}{% endif %}
+        </td>
+        <td>{{ a.summary }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No actions recorded yet — kill, lift, or bump this key from any channel and the entry will appear here.</p>
+  {% endif %}
+
+</div>

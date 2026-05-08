@@ -47,3 +47,8 @@ Thumbs.db
 
 # Sentry
 .sentryclirc
+
+# Credentials never committed
+PyPI-Recovery-Codes-*.txt
+*-recovery-codes*.txt
+.pypirc

@@ -27,7 +27,7 @@ from tourniquet.billing.profiles import PROFILES
 from tourniquet.billing.suggestions import InsufficientHistory, suggest_from_history
 from tourniquet.config import settings
 from tourniquet.db import get_session
-from tourniquet.models import ApiKey, UsageEvent
+from tourniquet.models import ApiKey, ApiKeyAction, UsageEvent
 
 router = APIRouter()
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -179,6 +179,35 @@ async def _get_heatmap_data(key_id: uuid.UUID, session: AsyncSession) -> list[li
     return grid
 
 
+async def _get_action_history(
+    key_id: uuid.UUID, session: AsyncSession, limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Last N audit-log entries for this key, newest first.
+
+    Powers the per-key Action history section. Each row shows when an action
+    happened, which channel triggered it (slack_socket / telegram_poll / web /
+    cli / auto), and a one-line summary. Even no-op actions (e.g. killing a
+    key already at minimum cap) appear here, so the operator sees their tap
+    landed.
+    """
+    result = await session.execute(
+        select(ApiKeyAction)
+        .where(ApiKeyAction.api_key_id == key_id)
+        .order_by(desc(ApiKeyAction.created_at))
+        .limit(limit)
+    )
+    rows = []
+    for a in result.scalars().all():
+        rows.append({
+            "ts": a.created_at,
+            "action": a.action,
+            "source": a.source,
+            "summary": a.summary,
+            "details": a.details or {},
+        })
+    return rows
+
+
 async def _get_alert_log(key_id: uuid.UUID, session: AsyncSession) -> list[dict[str, Any]]:
     """Last 50 cap-hit events from usage_events."""
     result = await session.execute(
@@ -243,6 +272,7 @@ async def dashboard(request: Request) -> HTMLResponse:
             daily_totals = await _get_daily_totals(first_key_id, 14, session)
             heatmap = await _get_heatmap_data(first_key_id, session)
             alert_log = await _get_alert_log(first_key_id, session)
+            history = await _get_action_history(first_key_id, session)
             suggestion = None
             try:
                 suggestion = suggest_from_history(
@@ -259,6 +289,7 @@ async def dashboard(request: Request) -> HTMLResponse:
                 "daily_totals": daily_totals,
                 "heatmap": heatmap,
                 "alert_log": alert_log,
+                "action_history": history,
                 "suggestion": suggestion,
                 "insights": insights,
                 "auto_tune_modes": ["off", "suggest", "creep"],
@@ -286,6 +317,7 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         daily_totals = await _get_daily_totals(key_id, 14, session)
         heatmap = await _get_heatmap_data(key_id, session)
         alert_log = await _get_alert_log(key_id, session)
+        history = await _get_action_history(key_id, session)
 
         # Suggestion
         suggestion = None
@@ -309,6 +341,7 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
         "daily_totals": daily_totals,
         "heatmap": heatmap,
         "alert_log": alert_log,
+        "action_history": history,
         "suggestion": suggestion,
         "insights": insights,
         "profiles": list(PROFILES.keys()),
@@ -376,6 +409,19 @@ async def alerts_log(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 
     return templates.TemplateResponse(request, "_partials/alerts_log.html", {
         "alert_log": alert_log,
+        "key_id": str(key_id),
+    })
+
+
+@router.get("/dashboard/key/{key_id}/history")
+async def action_history(request: Request, key_id: uuid.UUID) -> HTMLResponse:
+    """Per-key audit log of cap-changing actions. HTMX-polled every 10s."""
+    async with get_session() as session:
+        await _get_key_or_404(key_id, session)
+        history = await _get_action_history(key_id, session)
+
+    return templates.TemplateResponse(request, "_partials/action_history.html", {
+        "action_history": history,
         "key_id": str(key_id),
     })
 
