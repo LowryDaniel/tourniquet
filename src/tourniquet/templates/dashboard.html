@@ -20,17 +20,45 @@
           At least one API key added
           {% if not keys %} — <a href="/dashboard/keys/new">add one now</a>{% endif %}
         </li>
-        <li id="checklist-slack">
+        <li id="checklist-slack" class="{% if channel_status.slack.configured %}done{% endif %}">
           Slack alerts
-          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-slack')">Set up Slack</button>
+          {% if channel_status.slack.configured %}
+            <span class="channel-tier">— {{ channel_status.slack.tier }}</span>
+          {% else %}
+            <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-slack')">Set up Slack</button>
+          {% endif %}
         </li>
-        <li id="checklist-telegram">
+        <li id="checklist-telegram" class="{% if channel_status.telegram.configured %}done{% endif %}">
           Telegram alerts
-          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-telegram')">Set up Telegram</button>
+          {% if channel_status.telegram.configured %}
+            <span class="channel-tier">— {{ channel_status.telegram.tier }}</span>
+          {% else %}
+            <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-telegram')">Set up Telegram</button>
+          {% endif %}
         </li>
-        <li id="checklist-email">
+        <li id="checklist-email" class="{% if channel_status.email.configured %}done{% endif %}">
           Email alerts
-          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-email')">Set up Email</button>
+          {% if channel_status.email.configured %}
+            <span class="channel-tier">— {{ channel_status.email.tier }}</span>
+          {% else %}
+            <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-email')">Set up Email</button>
+          {% endif %}
+        </li>
+        <li id="checklist-desktop" class="{% if channel_status.desktop.configured %}done{% endif %}">
+          Desktop notifications
+          {% if channel_status.desktop.configured %}
+            <span class="channel-tier">— {{ channel_status.desktop.tier }}</span>
+          {% else %}
+            <span class="channel-tier muted">— optional, set <code>ENABLE_MAC_NOTIFICATIONS=true</code> in <code>~/.tourniquet/.env</code></span>
+          {% endif %}
+        </li>
+        <li id="checklist-webhook" class="{% if channel_status.webhook.configured %}done{% endif %}">
+          Generic webhook
+          {% if channel_status.webhook.configured %}
+            <span class="channel-tier">— {{ channel_status.webhook.tier }}</span>
+          {% else %}
+            <span class="channel-tier muted">— optional, for Zapier / n8n / Home Assistant</span>
+          {% endif %}
         </li>
       </ul>
       <p class="help-text">Complete the items above to make sure you get notified before spending reaches your cap. You can dismiss any channel you don't want.</p>

@@ -196,6 +196,54 @@ async def _get_heatmap_data(key_id: uuid.UUID, session: AsyncSession) -> list[li
     return grid
 
 
+def _alert_channel_status() -> dict[str, dict[str, Any]]:
+    """Inspect settings and return per-channel configured/tier status.
+
+    Powers the "Getting started" checklist on the dashboard so each row can
+    show ✓ green when the channel will actually deliver an alert.
+
+    For each channel:
+      configured: True when the channel will fire on a real cap-hit
+      tier:       short label describing the active path (e.g. "in-app one-tap"
+                  vs "browser-confirm webhook" for Slack)
+    """
+    slack_bot_full = bool(
+        settings.slack_app_token
+        and getattr(settings, "slack_bot_token", "")
+        and getattr(settings, "slack_channel_id", "")
+    )
+    slack_webhook = bool(settings.slack_webhook_url)
+    slack_configured = slack_bot_full or slack_webhook
+    if slack_bot_full:
+        slack_tier = "in-app one-tap (Socket Mode + bot post)"
+    elif slack_webhook:
+        slack_tier = "webhook + browser-confirm taps"
+    else:
+        slack_tier = ""
+
+    telegram_configured = bool(
+        getattr(settings, "telegram_bot_token", "")
+        and getattr(settings, "telegram_chat_id", "")
+    )
+    email_configured = bool(
+        getattr(settings, "resend_api_key", "")
+        and getattr(settings, "resend_from_email", "")
+    )
+    webhook_configured = bool(getattr(settings, "alert_webhook_url", ""))
+    desktop_configured = (
+        str(getattr(settings, "enable_mac_notifications", "")).lower() == "true"
+        or str(getattr(settings, "enable_desktop_notifications", "")).lower() == "true"
+    )
+
+    return {
+        "slack": {"configured": slack_configured, "tier": slack_tier},
+        "telegram": {"configured": telegram_configured, "tier": "in-app one-tap (long-poll)" if telegram_configured else ""},
+        "email": {"configured": email_configured, "tier": "Resend" if email_configured else ""},
+        "webhook": {"configured": webhook_configured, "tier": "generic JSON POST" if webhook_configured else ""},
+        "desktop": {"configured": desktop_configured, "tier": "OS banner" if desktop_configured else ""},
+    }
+
+
 async def _get_action_history(
     key_id: uuid.UUID, session: AsyncSession, limit: int = 50,
 ) -> list[dict[str, Any]]:
@@ -318,6 +366,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         "profiles": list(PROFILES.keys()),
         "profiles_obj": PROFILES,
         "currency": settings.display_currency,
+        "channel_status": _alert_channel_status(),
         **panel_ctx,
     })
 
@@ -379,6 +428,7 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 
     ctx["keys"] = summaries
     ctx["selected_id"] = str(key_id)
+    ctx["channel_status"] = _alert_channel_status()
     return templates.TemplateResponse(request, "dashboard.html", ctx)
 
 
