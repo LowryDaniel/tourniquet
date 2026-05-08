@@ -66,7 +66,7 @@ pip install -e .
 tourniquet
 ```
 
-See [docs/install.md](docs/install.md) for virtual-env setup, `pipx`, and Windows `cmd.exe` instructions.
+See [docs/install.md](docs/install.md) for virtual-env setup, `pipx`, and Windows `cmd.exe` instructions. For 24/7 enforcement (Docker, Proxmox LXC, Raspberry Pi, cloud VM), see [docs/deploy.md](docs/deploy.md).
 
 ---
 
