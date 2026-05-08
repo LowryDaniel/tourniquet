@@ -8,7 +8,9 @@
   <div class="control-grid">
 
     {# Daily cap — chips + nudge buttons + free-form input, all auto-save #}
-    <label class="control-label">Daily cap</label>
+    <label class="control-label">
+      <span class="tooltip">Daily cap<span class="tooltip-content">The maximum dollars Tourniquet will let this key spend in one day. Resets automatically at midnight UTC every night.</span></span>
+    </label>
     <form class="control-row cap-row" id="cap-form-{{ key_id }}"
           hx-post="/dashboard/key/{{ key_id }}/cap"
           hx-target="#control-panel"
@@ -41,6 +43,10 @@
                   onclick="nudgeCap('{{ key_id }}', 2)">+5</button>
         </div>
         <span class="autosave-hint" id="cap-hint-{{ key_id }}">auto-saves on change</span>
+      </div>
+      <p class="help-text">Maximum dollars this key can spend today. Type <code>1</code> for $1.00, <code>0.50</code> for 50 cents. Resets at midnight UTC.</p>
+      <div class="warning-callout">
+        Type dollars, not cents. <code>1</code> means $1.00 and <code>0.01</code> means 1 cent. If your key keeps stopping too early, check you haven't typed cents when you meant dollars.
       </div>
     </form>
     <script>
@@ -95,7 +101,9 @@
     </script>
 
     {# Profile — auto-save on change, with hover descriptions #}
-    <label class="control-label" title="standard = hard kill at 100% · strict = hard kill, no chatter · monitor = alerts only, one-click kill link">Profile <span class="help-icon">ⓘ</span></label>
+    <label class="control-label">
+      <span class="tooltip">Profile<span class="tooltip-content">Controls how Tourniquet behaves when you approach or hit the cap. "standard" blocks requests at 100%; "monitor" only alerts without blocking; "aggressive" starts restricting earlier.</span></span>
+    </label>
     <form class="control-row"
           hx-post="/dashboard/key/{{ key_id }}/profile"
           hx-target="#control-panel"
@@ -107,10 +115,13 @@
                 title="{{ p.description }}">{{ name }}</option>
         {% endfor %}
       </select>
+      <p class="help-text">Preset behaviour. "standard" blocks at the cap; "monitor" just alerts without stopping anything; "aggressive" kills earlier. Start with "standard" if you're unsure.</p>
     </form>
 
     {# Auto-tune — auto-save on change #}
-    <label class="control-label">Auto-tune</label>
+    <label class="control-label">
+      <span class="tooltip">Auto-tune<span class="tooltip-content">Lets Tourniquet suggest or automatically adjust your cap based on your recent spending history. "suggest" shows a recommendation; "creep" quietly raises the cap over time; "off" does nothing.</span></span>
+    </label>
     <form class="control-row"
           hx-post="/dashboard/key/{{ key_id }}/auto-tune"
           hx-target="#control-panel"
@@ -121,10 +132,13 @@
           <option value="{{ m }}" {% if m == key.auto_tune_mode %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
+      <p class="help-text">Lets Tourniquet suggest or apply cap changes based on your usage history. Start with "suggest" if unsure — it shows a recommendation without changing anything automatically.</p>
     </form>
 
     {# Kill switch — toggle on click; disabling requires confirmation #}
-    <label class="control-label">Kill switch</label>
+    <label class="control-label">
+      <span class="tooltip">Kill switch<span class="tooltip-content">When enabled (the default), Tourniquet actually blocks API requests once you hit the cap. When disabled, it only records spend and sends alerts — nothing is stopped.</span></span>
+    </label>
     <form class="control-row"
           id="kill-form-{{ key_id }}"
           hx-post="/dashboard/key/{{ key_id }}/kill"
@@ -135,6 +149,7 @@
       <button type="submit" class="btn-small {% if key.kill_enabled %}btn-active{% endif %}">
         {% if key.kill_enabled %}✓ enabled{% else %}○ disabled{% endif %}
       </button>
+      <p class="help-text">Recommended: leave this enabled. Disabling means Tourniquet will alert you but won't stop requests — your agents keep running past the cap.</p>
     </form>
     <script>
       function confirmKillToggle_{{ key_id|replace('-','_') }}() {
@@ -152,7 +167,9 @@
     </script>
 
     {# Lift today — fires on click #}
-    <label class="control-label">Lift today</label>
+    <label class="control-label">
+      <span class="tooltip">Lift today<span class="tooltip-content">Temporarily raises the cap for the rest of today only. Your original cap comes back automatically at midnight UTC — you don't need to do anything tomorrow.</span></span>
+    </label>
     <div class="control-row">
       <form style="display:inline"
             hx-post="/dashboard/key/{{ key_id }}/lift"
@@ -167,7 +184,7 @@
             hx-target="#control-panel"
             hx-swap="outerHTML">
         <input type="hidden" name="mode" value="ceiling">
-        <button type="submit" class="btn-small">🚀 ceiling</button>
+        <button type="submit" class="btn-small">🚀 <span class="tooltip">ceiling<span class="tooltip-content">Raises the cap all the way to the maximum you've set for this key. Still resets at midnight UTC.</span></span></button>
       </form>
       {% if key.lift_active %}
       <form style="display:inline"
@@ -177,6 +194,10 @@
         <button type="submit" class="btn-small btn-danger">Unlift</button>
       </form>
       {% endif %}
+      <p class="help-text">Raises today's cap without changing tomorrow's. "2×" doubles the current cap; "ceiling" raises it to the maximum allowed for this key.</p>
+      <div class="warning-callout">
+        "Kill now" only affects today. Tomorrow your original cap returns automatically. You don't need to re-enter the cap value after killing — just let midnight UTC pass.
+      </div>
     </div>
 
     {# Rotate token — destructive, keep explicit confirm #}

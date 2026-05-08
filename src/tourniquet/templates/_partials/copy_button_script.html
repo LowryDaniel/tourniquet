@@ -1,0 +1,13 @@
+<script>
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.copy-btn');
+  if (!btn) return;
+  var code = btn.parentElement.querySelector('pre code, code');
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent.trim()).then(function() {
+    var orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(function() { btn.textContent = orig; }, 1500);
+  });
+});
+</script>

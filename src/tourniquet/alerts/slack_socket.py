@@ -35,9 +35,11 @@ from tourniquet.config import settings
 def _ssl_context() -> ssl.SSLContext:
     """SSL context backed by certifi's CA bundle.
 
-    Necessary for Python.org Python on macOS, which ships without the system
-    CA store and would otherwise raise CERTIFICATE_VERIFY_FAILED when the
-    `websockets` library connects to Slack's wss endpoint.
+    Python.org's Python distribution on macOS ships without system CA
+    certificates. When `websockets` connects to Slack's wss:// endpoint to
+    open the Socket Mode channel, it checks the server certificate against the
+    system store and fails with CERTIFICATE_VERIFY_FAILED. We explicitly pass
+    certifi's bundled CA store to SSL context creation to work around this.
     """
     return ssl.create_default_context(cafile=certifi.where())
 

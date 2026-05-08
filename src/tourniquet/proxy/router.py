@@ -34,7 +34,22 @@ router = APIRouter()
 
 
 def _effective_cap(api_key: ApiKey, now: datetime) -> int:
-    """Return the active daily cap, honouring any temporary lift."""
+    """Return the active daily cap, honouring any temporary lift.
+
+    Two-tier cap system:
+    - daily_cap_usd_cents: the configured "normal" quota, persistent across days
+    - lifted_cap_usd_cents: temporary override, used for emergency kills and
+      in-app recovery bumps, auto-expires at midnight UTC
+
+    This function returns lifted_cap if:
+      1. lifted_cap is set (not None)
+      2. lift_expires_at is set and in the future (now < expires_at)
+    Otherwise falls back to daily_cap.
+
+    Lifted cap takes PRECEDENCE over daily cap while active, not the reverse —
+    this is how emergency stops (kill_enabled=True) block requests and how
+    in-app bumps temporarily increase allowance.
+    """
     if (
         api_key.lifted_cap_usd_cents is not None
         and api_key.lift_expires_at is not None
@@ -142,8 +157,12 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
         is_streaming = bool(parsed.get("stream", False))
 
         # ── Pre-flight max-cost guard ─────────────────────────────────────────
-        # Estimate worst-case cost and reject if it'd blow the cap by more than
-        # the configured tolerance. Small overages allowed (let it ride).
+        # Before forwarding to Anthropic, estimate the request's worst-case cost
+        # (input tokens + max_tokens output) and reject with 402 if it would
+        # exceed today's effective cap by more than both the absolute and
+        # percentage-based tolerances. This stops obviously oversized requests
+        # before they waste API tokens. Small overages are allowed (let it ride)
+        # — overage must exceed BOTH abs and pct thresholds to trigger the block.
 
         if api_key.kill_enabled:
             req_model = parsed.get("model", "claude-sonnet-4-6")

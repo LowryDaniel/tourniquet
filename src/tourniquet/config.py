@@ -5,11 +5,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _env_file_candidates() -> list[str]:
-    """Priority order for .env discovery (pydantic-settings merges all found
-    files, last-listed wins for duplicate keys).
+    """Priority order for .env discovery.
 
-    We want:  CWD/.env > ~/.tourniquet/.env > $TOURNIQUET_CONFIG_DIR/.env
-    So list them in ascending priority (last = highest priority).
+    Pydantic-settings merges all found files and uses the last-listed value
+    when the same key appears in multiple files (last write wins).
+
+    We want CWD/.env to override ~/.tourniquet/.env, which overrides the
+    TOURNIQUET_CONFIG_DIR path, so we list them in ascending priority order
+    (last = highest priority). This lets a local dev .env shadow the system-wide
+    config for quick testing.
     """
     candidates: list[str] = []
     override = os.environ.get("TOURNIQUET_CONFIG_DIR")
@@ -48,9 +52,11 @@ class Settings(BaseSettings):
     suggestion_window_days: int = 14          # env: SUGGESTION_WINDOW_DAYS
 
     # ── Pre-flight max-cost guard ─────────────────────────────────────────────
-    # When a single request's worst-case cost would push you over today's cap by
-    # more than (max_overage_abs_cents) AND more than (max_overage_pct%), block
-    # the request pre-flight with 402. Small overages are allowed (let it ride).
+    # Before proxying a request to Anthropic, estimate its worst-case cost and
+    # reject pre-flight with HTTP 402 if it would exceed your cap by more than
+    # BOTH (max_overage_abs_cents) AND (max_overage_pct%). Small overages are
+    # allowed (let it ride) — this is why we use AND, not OR. Protects against
+    # runaway requests while being lenient on small overages.
     max_overage_abs_cents: int = 50      # env: MAX_OVERAGE_ABS_CENTS — 50¢
     max_overage_pct: int = 10            # env: MAX_OVERAGE_PCT — 10% of cap
 

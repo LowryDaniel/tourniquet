@@ -15,17 +15,26 @@
 
     <label>Name
       <input type="text" name="name" required placeholder="e.g. ojw-swarm" maxlength="100">
+      <span class="help-text">A short label for this key so you can tell it apart on the dashboard. Use something that describes the project or agent that will use it.</span>
     </label>
 
-    <label>Anthropic API key
+    <label>
+      <span class="tooltip">Anthropic API key<span class="tooltip-content">Your real sk-ant-... credential from console.anthropic.com. Tourniquet stores it encrypted on this machine and never sends it anywhere except Anthropic itself.</span></span>
       <input type="password" name="anthropic_key" required placeholder="sk-ant-...">
+      <span class="help-text">Your <code>sk-ant-…</code> key from <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. Stored encrypted on this machine; never sent anywhere except Anthropic itself.</span>
     </label>
 
-    <label>Daily cap ({{ currency }})
+    <label>
+      <span class="tooltip">Daily cap<span class="tooltip-content">The maximum dollars Tourniquet will let this key spend per day. Resets automatically at midnight UTC each night.</span></span> ({{ currency }})
       <input type="number" name="daily_cap" value="5.00" min="0.01" step="0.01" required>
+      <span class="help-text">Maximum dollars this key can spend today. Type <code>1</code> for $1, <code>0.50</code> for 50 cents. Resets at midnight UTC.</span>
+      <div class="warning-callout">
+        Type dollars, not cents. <code>1</code> means $1.00 and <code>0.01</code> means 1 cent — not $1.
+      </div>
     </label>
 
-    <label>Profile
+    <label>
+      <span class="tooltip">Profile<span class="tooltip-content">Controls what happens when this key hits the cap. "standard" blocks requests; "monitor" only alerts; "aggressive" starts limiting earlier.</span></span>
       <select name="profile" id="profile-select" onchange="updateProfileHelp()">
         {% for name, p in profiles_obj.items() %}
         <option value="{{ name }}"{% if name == "standard" %} selected{% endif %}>{{ name }} — {{ p.description }}</option>
@@ -34,6 +43,7 @@
       <div class="help-block" id="profile-help">
         <strong>standard:</strong> {{ profiles_obj.standard.description }} <em>Pick this if {{ profiles_obj.standard.pick_me_if }}</em>
       </div>
+      <span class="help-text">Preset behaviour. "standard" blocks at the cap; "monitor" just alerts; "aggressive" kills earlier. Start with "standard" if you're unsure.</span>
     </label>
     <script>
       const profileHelp = {

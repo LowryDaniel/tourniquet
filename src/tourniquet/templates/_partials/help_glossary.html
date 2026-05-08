@@ -1,0 +1,47 @@
+<div class="glass-panel help-glossary" id="help-glossary" style="display:none" role="dialog" aria-label="Glossary">
+  <div class="help-glossary-header">
+    <h3>Glossary — what these words mean</h3>
+    <button type="button" class="btn-small" onclick="document.getElementById('help-glossary').style.display='none'" aria-label="Close glossary">✕ Close</button>
+  </div>
+  <dl class="glossary-list">
+    <dt>sk-ant- key</dt>
+    <dd>Your real Anthropic API key — the secret string from console.anthropic.com that authorises you to use Claude. Tourniquet stores it encrypted; your agents never see it directly.</dd>
+
+    <dt>tq_ token</dt>
+    <dd>A proxy token Tourniquet generates for each key. Your agents use this instead of the real sk-ant- key. Tourniquet swaps it for the real key before forwarding to Anthropic, so your actual key never leaves this machine.</dd>
+
+    <dt>daily_cap</dt>
+    <dd>The maximum dollars Tourniquet will let this key spend in one calendar day (midnight UTC to midnight UTC). Once reached, requests are blocked until tomorrow — unless you lift the cap.</dd>
+
+    <dt>lifted_cap</dt>
+    <dd>A temporary higher cap that overrides the daily cap for the rest of today only. It expires automatically at midnight UTC. Your original daily cap comes back tomorrow — you don't need to re-enter it.</dd>
+
+    <dt>kill switch / kill_enabled</dt>
+    <dd>When on (the default), Tourniquet actually blocks requests once the cap is hit. When off, it only records spend and sends alerts — nothing is blocked. Leave it on unless you have a specific reason to disable it.</dd>
+
+    <dt>kill now</dt>
+    <dd>Immediately clamps today's remaining budget to zero (or to what you've already spent). Only affects today — tomorrow's cap is unchanged. Use this to stop a runaway agent mid-flight.</dd>
+
+    <dt>auto_tune</dt>
+    <dd>Tourniquet can look at your recent spending history and suggest (or automatically adjust) a better cap. "off" = no suggestions, "suggest" = shows a recommendation you can accept or ignore, "creep" = quietly adjusts the cap over time.</dd>
+
+    <dt>profile</dt>
+    <dd>A preset that controls how Tourniquet behaves near and at the cap. "standard" blocks at 100%; "monitor" only alerts (no blocking); "aggressive" starts limiting earlier. Standard is the right choice for most people.</dd>
+
+    <dt>ceiling / absolute_ceiling</dt>
+    <dd>The highest the cap can ever be raised to via the lift buttons, regardless of multipliers. A safety net so a runaway auto-tune or stray tap can't push spending to infinity.</dd>
+
+    <dt>monitor mode</dt>
+    <dd>Running with the "monitor" profile (or kill switch disabled). Tourniquet watches and alerts but never blocks requests. Useful for understanding your usage before you commit to hard limits.</dd>
+
+    <dt>midnight UTC</dt>
+    <dd>The point in time when the daily cap resets. UTC is a fixed time zone — it doesn't change with daylight saving. If you're in London in summer, midnight UTC is 1:00 AM for you. In New York, it's 8:00 PM the previous evening.</dd>
+  </dl>
+</div>
+
+<script>
+function toggleGlossary() {
+  var g = document.getElementById('help-glossary');
+  if (g) g.style.display = g.style.display === 'none' ? 'block' : 'none';
+}
+</script>

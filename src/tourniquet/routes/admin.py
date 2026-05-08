@@ -132,17 +132,23 @@ async def _apply_lift_by_amount(
 
 
 async def _apply_kill_now(key_id: uuid.UUID, source: str = "web") -> tuple[str, int]:
-    """Set kill_enabled=True and clamp TODAY'S effective cap to today's spend.
+    """Emergency stop: block today's requests and preserve the daily_cap baseline.
 
-    Writes to `lifted_cap_usd_cents` (with `lift_expires_at = next midnight UTC`),
-    NOT `daily_cap_usd_cents`. The proxy's `_effective_cap()` honours the lift
-    while it's active, so today's requests are blocked. Tomorrow the lift
-    naturally expires and the user's original daily_cap returns — they don't
-    have to manually re-enter their cap after every kill.
+    Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) to today's spend,
+    with `lift_expires_at = next midnight UTC`. The proxy's `_effective_cap()`
+    logic returns the lifted cap while it's active, so requests are blocked.
+    When the lift expires at midnight, the original `daily_cap` re-activates
+    automatically — no manual reset required.
 
-    Why the previous behaviour was wrong: clamping daily_cap to today_spend
-    permanently destroyed the user's configured baseline. After one kill,
-    the key was stuck at 1¢ until the user re-set the cap by hand.
+    This design preserves the user's configured baseline (daily_cap):
+    - Daily_cap is the "normal" quota, persistent across days
+    - Lifted_cap is a temporary override with auto-expiry, used for emergency
+      stops and in-app recovery bumps. It shadows daily_cap while active.
+
+    Historical context: clamping daily_cap to today_spend permanently destroyed
+    the user's quota — after one kill, the key was stuck at 1¢ until the user
+    manually re-set daily_cap. This approach avoids that tragedy by leaving
+    daily_cap untouched; the kill is temporary by design.
 
     Returns (key_name, new_effective_cap_cents).
     """
@@ -202,14 +208,24 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web") -> tuple[str, 
 
 
 async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web") -> str | None:
-    """Apply a mode-based cap lift (`2x` / `ceiling` / `ignore`).
+    """Apply a mode-based cap lift (`2x` / `ceiling` / `ignore`) until midnight UTC.
 
-    Records an audit row tagged `source`. Used by Slack/Telegram in-app
-    callbacks; the `mode == "ignore"` branch is a recorded no-op so the
-    history shows the user explicitly dismissed the alert.
+    Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) with auto-expiry
+    at midnight UTC. Each mode doubles the baseline or jumps to the absolute
+    ceiling, clamped to prevent overage.
 
-    Returns the key name on success, or None when the key wasn't found
-    (matches the prior contract for the Telegram callback wrapper).
+    The `mode == "ignore"` branch still records an audit entry (marked no-op),
+    so the dashboard history shows the user explicitly dismissed that alert
+    — useful for understanding user intent over time.
+
+    Used by Slack/Telegram in-app callbacks (users tap a +$ button in a message).
+    Records an audit row tagged with `source` (slack_socket / telegram_poll / web)
+    so the dashboard history tracks which channel triggered the lift.
+
+    Returns the key name on success, or None when the key wasn't found.
+    (Returning None instead of raising matches the Telegram callback wrapper's
+    prior contract — no need to throw exceptions for missing keys during async
+    callbacks.)
     """
     from tourniquet.audit import ACTION_LIFT_MODE, record_action
 

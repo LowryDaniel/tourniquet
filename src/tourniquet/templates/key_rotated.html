@@ -16,6 +16,7 @@
       <code id="token-val">{{ token }}</code>
       <button onclick="copyText('token-val', this)" class="btn-small">Copy</button>
     </div>
+    <p class="help-text">This is your <span class="tooltip">tq_ token<span class="tooltip-content">A proxy token Tourniquet generates for you. Your agents use this instead of your real sk-ant- key. Tourniquet swaps it for the real key before forwarding to Anthropic — your actual key never leaves this machine.</span></span>. Use it anywhere you would normally put your Anthropic API key. It starts with <code>tq_</code> so you can tell it apart from the real key.</p>
     <p class="muted-hint" style="margin-top:.75rem">🔒 Only the bcrypt hash of this token is stored in the local SQLite DB. Even Tourniquet can't recover the plaintext — that's why we show it once.</p>
   </div>
 

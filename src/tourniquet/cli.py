@@ -42,8 +42,9 @@ def _lookup_key_by_name(name: str):
 
     Used by `test-alerts --key NAME` to bind the synthetic alert to a real
     key — so the alert message shows that key's actual cap, and in-app taps
-    persist back to its `lifted_cap_usd_cents`. Without this, --key only
-    affects the human-readable label.
+    (e.g., Telegram bump buttons) persist back to its `lifted_cap_usd_cents`,
+    actually mutating the real cap. Without this binding, --key only affects
+    the human-readable label in the alert, not the backend.
     """
     import asyncio as _asyncio
 

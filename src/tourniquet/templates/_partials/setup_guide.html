@@ -1,0 +1,215 @@
+{#
+  Setup guides for each alert channel.
+  Each guide is wrapped in a <details> element so it collapses by default.
+  Pass channel="slack|telegram|email|webhook" to show only one, or omit to show all.
+#}
+
+{% if not channel or channel == "slack" %}
+<details class="glass-panel setup-guide-panel" id="setup-guide-slack">
+  <summary class="setup-guide-title">Set up Slack alerts</summary>
+  <div class="setup-guide-body">
+    <p class="help-text">Slack alerts let Tourniquet message you when your spending is about to hit the cap. You can tap a button in Slack to raise the cap without opening the dashboard.</p>
+
+    <h4>What you need first</h4>
+    <ul>
+      <li>A Slack workspace where you can create and install apps (your own workspace works fine)</li>
+    </ul>
+
+    <h4>Basic setup — 2 minutes, alerts only</h4>
+    <ol class="setup-steps">
+      <li>
+        Go to <strong>api.slack.com/apps</strong> and click <strong>Create New App → From scratch</strong>. Name it <em>Tourniquet</em>.
+      </li>
+      <li>
+        In the left sidebar choose <strong>Incoming Webhooks</strong>, toggle it <strong>On</strong>, then click <strong>Add New Webhook to Workspace</strong>. Pick a channel or DM yourself, then click Allow.
+      </li>
+      <li>
+        Slack shows you a URL starting with <code>https://hooks.slack.com/services/…</code>. Copy it.
+      </li>
+      <li>
+        Open <code>~/.tourniquet/.env</code> and add:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL</code></pre>
+        </div>
+      </li>
+      <li>
+        Restart Tourniquet (<kbd>Ctrl+C</kbd> then <code>tourniquet start</code>), then run the test command:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>tourniquet test-alerts --key YOUR_KEY_NAME</code></pre>
+        </div>
+        You should see a message appear in Slack within a couple of seconds.
+      </li>
+    </ol>
+
+    <div class="warning-callout">
+      Bot tokens (starting <code>xoxb-</code>) and app tokens (starting <code>xapp-</code>) are different things — you need both for in-app one-tap buttons. A webhook URL alone gives you alerts, but tapping the button in Slack will open a browser tab instead of applying the change directly.
+    </div>
+
+    <h4>Optional: in-app one-tap buttons — 8 more minutes</h4>
+    <p class="help-text">Without this, Slack buttons open a browser tab to confirm. With this, tapping a button in Slack applies the change immediately, with no browser needed.</p>
+    <ol class="setup-steps">
+      <li>
+        In your Slack app settings: <strong>Settings → Socket Mode → Enable Socket Mode ON</strong>. When prompted, generate an app-level token with scope <code>connections:write</code>. Copy the <code>xapp-…</code> token that appears — Slack shows it only once.
+      </li>
+      <li>
+        Go to <strong>Features → OAuth &amp; Permissions → Bot Token Scopes → Add <code>chat:write</code></strong>. Then click <strong>Install to Workspace</strong> and approve. Copy the <code>xoxb-…</code> token shown.
+      </li>
+      <li>
+        In Slack, open the channel you want alerts in and type <code>/invite @Tourniquet</code>. Then right-click the channel name → <strong>Copy link</strong>. The channel ID is the last part of the URL (e.g. <code>C123ABC456</code>).
+      </li>
+      <li>
+        Go to <strong>Features → Interactivity &amp; Shortcuts → toggle Interactivity ON</strong>. Leave the Request URL blank — Tourniquet uses Socket Mode, not a public URL.
+      </li>
+      <li>
+        Add all three lines to <code>~/.tourniquet/.env</code>:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>SLACK_APP_TOKEN=xapp-1-...
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_CHANNEL_ID=C123ABC456</code></pre>
+        </div>
+      </li>
+      <li>
+        Restart Tourniquet and watch for <code>Slack Socket connected</code> in the log. Then test:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>tourniquet test-alerts --key YOUR_KEY_NAME</code></pre>
+        </div>
+      </li>
+    </ol>
+  </div>
+</details>
+{% endif %}
+
+{% if not channel or channel == "telegram" %}
+<details class="glass-panel setup-guide-panel" id="setup-guide-telegram">
+  <summary class="setup-guide-title">Set up Telegram alerts</summary>
+  <div class="setup-guide-body">
+    <p class="help-text">Telegram alerts buzz your phone immediately. Tapping a button in the message applies the change with no browser needed — no public URL required.</p>
+
+    <h4>What you need first</h4>
+    <ul>
+      <li>A Telegram account (the free app on your phone or desktop)</li>
+    </ul>
+
+    <ol class="setup-steps">
+      <li>
+        Open Telegram and search for <strong>@BotFather</strong> — make sure it has the blue verified tick. Tap Start, then send <code>/newbot</code>. Follow the prompts to give your bot a name and username (must end in <code>bot</code>). BotFather gives you an API token that looks like <code>123456789:AAEhBP…</code> — copy it.
+      </li>
+      <li>
+        Search Telegram for the bot username you just created and tap <strong>Start</strong>. Send any message (e.g. <code>hi</code>). This lets the bot reply to you.
+      </li>
+      <li>
+        Find your Telegram chat ID by visiting this URL in your browser (replace <code>TOKEN</code> with the token from step 1):
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>https://api.telegram.org/botTOKEN/getUpdates</code></pre>
+        </div>
+        Look for <code>"chat":{"id":</code> in the response. That number is your chat ID.
+      </li>
+      <li>
+        Add both lines to <code>~/.tourniquet/.env</code>:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>TELEGRAM_BOT_TOKEN=123456789:AAEhBPzLhfg-xxxxxxxxxxxxxxxxxxxxxxxxx
+TELEGRAM_CHAT_ID=987654321</code></pre>
+        </div>
+        <div class="warning-callout">
+          Paste just the number for the chat ID — not the label. <code>987654321</code> is correct; <code>Chat ID: 987654321</code> will break it.
+        </div>
+      </li>
+      <li>
+        Restart Tourniquet and test:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>tourniquet test-alerts --key YOUR_KEY_NAME</code></pre>
+        </div>
+        Your phone should buzz within a second or two.
+      </li>
+    </ol>
+  </div>
+</details>
+{% endif %}
+
+{% if not channel or channel == "email" %}
+<details class="glass-panel setup-guide-panel" id="setup-guide-email">
+  <summary class="setup-guide-title">Set up email alerts</summary>
+  <div class="setup-guide-body">
+    <p class="help-text">Email alerts require a domain you own (like <code>yourname.com</code>). Gmail addresses won't work. If you don't own a domain, use Slack or Telegram instead — they're simpler and free.</p>
+
+    <h4>What you need first</h4>
+    <ul>
+      <li>A domain you own with access to its DNS settings</li>
+      <li>A free account at <strong>resend.com</strong></li>
+    </ul>
+
+    <ol class="setup-steps">
+      <li>
+        Sign up at <strong>resend.com</strong> (free tier: 3,000 emails per month).
+      </li>
+      <li>
+        Go to <strong>Domains → Add Domain</strong> and enter your domain. Resend shows you DNS records to add. In your DNS provider (Cloudflare, etc.), add those TXT records. Wait 1–5 minutes for verification.
+      </li>
+      <li>
+        Go to <strong>API Keys → Create</strong>. Name it <code>tourniquet</code>, permission: Sending access. Copy the key.
+      </li>
+      <li>
+        Add to <code>~/.tourniquet/.env</code>:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>RESEND_API_KEY=re_xxxxxxxxxxxxxxxx
+RESEND_FROM_EMAIL=alerts@yourdomain.com</code></pre>
+        </div>
+      </li>
+      <li>
+        In the Tourniquet dashboard, set each key's <strong>alert email</strong> field to the address where you want alerts delivered.
+      </li>
+      <li>
+        Restart Tourniquet and test:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>tourniquet test-alerts --key YOUR_KEY_NAME</code></pre>
+        </div>
+        Check your inbox (and spam folder — new domains often land there first).
+      </li>
+    </ol>
+  </div>
+</details>
+{% endif %}
+
+{% if not channel or channel == "webhook" %}
+<details class="glass-panel setup-guide-panel" id="setup-guide-webhook">
+  <summary class="setup-guide-title">Set up a webhook (Zapier, n8n, Home Assistant, custom)</summary>
+  <div class="setup-guide-body">
+    <p class="help-text">A webhook lets Tourniquet ping any URL when an alert fires. Use this to connect to Zapier, n8n, Home Assistant, Discord, or your own server.</p>
+
+    <ol class="setup-steps">
+      <li>
+        Get a target URL that accepts POST requests with JSON:
+        <ul>
+          <li><strong>Zapier:</strong> new Zap → trigger "Webhooks by Zapier" → "Catch Hook" → copy URL</li>
+          <li><strong>n8n:</strong> new workflow → Webhook node → copy production URL</li>
+          <li><strong>Home Assistant:</strong> automation with Webhook trigger</li>
+        </ul>
+      </li>
+      <li>
+        Add to <code>~/.tourniquet/.env</code>:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>ALERT_WEBHOOK_URL=https://hooks.zapier.com/hooks/catch/.../...</code></pre>
+        </div>
+      </li>
+      <li>
+        Restart Tourniquet and test:
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>tourniquet test-alerts --key YOUR_KEY_NAME</code></pre>
+        </div>
+        Check your Zapier/n8n/HA history — you should see one incoming POST.
+      </li>
+    </ol>
+  </div>
+</details>
+{% endif %}

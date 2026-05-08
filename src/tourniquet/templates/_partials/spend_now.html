@@ -18,8 +18,9 @@
   </div>
   {% if key.lift_active %}
   <div class="lift-status">
-    Lifted to {{ key.effective_cap_display }}
-    {% if key.lift_expires_at %}until {{ key.lift_expires_at.strftime('%H:%M UTC') }}{% endif %}
+    <span class="tooltip">Lifted<span class="tooltip-content">A temporary higher cap is active for today only. Your original cap returns automatically at midnight UTC.</span></span>
+    to {{ key.effective_cap_display }}
+    {% if key.lift_expires_at %}until <span class="tooltip">{{ key.lift_expires_at.strftime('%H:%M UTC') }}<span class="tooltip-content">Midnight UTC — when the temporary lift expires and your original daily cap resumes automatically.</span></span>{% endif %}
     —
     <form style="display:inline"
           hx-post="/dashboard/key/{{ key_id }}/unlift"
@@ -29,6 +30,6 @@
     </form>
   </div>
   {% else %}
-  <div class="lift-status lift-none">Lift status: NONE</div>
+  <div class="lift-status lift-none">No temporary lift active</div>
   {% endif %}
 </div>

@@ -2,7 +2,9 @@
 
   <div class="key-panel-header">
     <h2 class="key-panel-name">{{ key.name }}</h2>
-    <span class="badge">{{ key.profile }}</span>
+    <span class="badge">
+      <span class="tooltip">{{ key.profile }}<span class="tooltip-content">The active profile controls what happens at the cap: "standard" blocks requests; "monitor" alerts only; "aggressive" limits earlier. Change it in the Control section below.</span></span>
+    </span>
   </div>
 
   {# Live spend bar — polls every 5s #}

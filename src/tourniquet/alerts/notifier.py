@@ -113,16 +113,21 @@ def _format_message(event: AlertEvent) -> str:
 
 
 async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, str]:
-    """Send the alert to every configured channel concurrently.
+    """Send the alert to every configured channel concurrently (fan-out pattern).
 
-    Pass kill_enabled=False when the key is in monitor mode — this causes a
-    signed kill-now URL to be embedded in the event and surfaced in all channels
-    that support it.
+    Each channel runs as its own asyncio task and reports delivery status
+    independently. A failure in one channel (e.g., Slack is down) does NOT
+    block the others (e.g., email still goes out). This resilience is why we
+    fan out instead of bailing on first error.
+
+    Pass kill_enabled=False when the key is in monitor mode — this embeds a
+    signed kill-now URL in the event, surfaced in all channels that support
+    interactive buttons (Slack, Telegram, etc.).
 
     Returns a dict mapping channel name to one of:
       "sent" | "skipped:no-config" | "error:<message>"
 
-    Never raises — channel failures are captured and returned.
+    Never raises — all exceptions are caught, logged, and returned as errors.
     """
     from tourniquet.alerts.desktop import send_desktop_notification
     from tourniquet.alerts.email import send_email

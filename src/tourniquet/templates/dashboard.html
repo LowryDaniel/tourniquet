@@ -10,6 +10,43 @@
 
   {# ── Main panel ── #}
   <section class="main-panel" id="main-panel">
+
+    {# ── Getting started checklist — always shown at top ── #}
+    <div class="glass-panel setup-checklist-panel">
+      <h3 class="section-heading">Getting started</h3>
+      <ul class="setup-checklist">
+        <li class="done">Tourniquet running</li>
+        <li class="{% if keys %}done{% endif %}">
+          At least one API key added
+          {% if not keys %} — <a href="/dashboard/keys/new">add one now</a>{% endif %}
+        </li>
+        <li id="checklist-slack">
+          Slack alerts
+          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-slack')">Set up Slack</button>
+        </li>
+        <li id="checklist-telegram">
+          Telegram alerts
+          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-telegram')">Set up Telegram</button>
+        </li>
+        <li id="checklist-email">
+          Email alerts
+          <button type="button" class="btn-small" onclick="toggleGuide('setup-guide-email')">Set up Email</button>
+        </li>
+      </ul>
+      <p class="help-text">Complete the items above to make sure you get notified before spending reaches your cap. You can dismiss any channel you don't want.</p>
+    </div>
+
+    {# ── Setup guides — collapsed by default ── #}
+    <div id="setup-guides-container">
+      {% include "_partials/setup_guide.html" %}
+    </div>
+    <script>
+    function toggleGuide(id) {
+      var el = document.getElementById(id);
+      if (el) { el.open = !el.open; el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+    }
+    </script>
+
     {% if selected_id %}
       {% include "_partials/key_panel.html" %}
     {% else %}

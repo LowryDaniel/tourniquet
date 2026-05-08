@@ -92,7 +92,14 @@ class TelegramPoller:
                 backoff = min(backoff * 2, _BACKOFF_MAX_SECONDS)
 
     async def _drain_initial(self) -> None:
-        """On startup, advance the offset past any backlog so we only see future taps."""
+        """On startup, skip any backlog of old updates so we only see future taps.
+
+        Without this, if Tourniquet restarted and the Telegram bot received taps
+        while it was down, we'd replay those old taps when we come back online
+        — potentially re-triggering stale cap lifts. By advancing the offset past
+        all existing updates on startup (offset=-1, timeout=0 gets the latest),
+        we ensure we only dispatch tap events that arrive AFTER the poller starts.
+        """
         try:
             resp = await self._call("getUpdates", offset=-1, timeout=0)
             if not resp.get("ok"):

@@ -2,11 +2,12 @@
 
 `record_action()` adds a row to api_key_actions inside the caller's session.
 The caller is responsible for committing — so the audit row lands atomically
-with the cap mutation it describes.
+with the cap mutation it describes. This means both the cap change and the
+audit record succeed or fail together, maintaining consistency.
 
-Audit failures must NEVER break the user-facing path: if recording fails for
-any reason we log a warning and swallow. Better to have a missing audit row
-than a broken kill button.
+Audit failures must NEVER break user-facing paths (kill, lift, recovery):
+failures are logged and swallowed. Better to have a missing audit row than a
+broken kill button — the cap changes are what matter operationally.
 """
 
 from __future__ import annotations
