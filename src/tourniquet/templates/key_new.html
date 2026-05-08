@@ -13,55 +13,39 @@
 
   <form action="/dashboard/keys/new" method="post" class="key-form">
 
-    <label>Name
+    <label>
+      <span class="tooltip">Name<span class="tooltip-content">A short label so you can tell this key apart on the dashboard. Use something that describes the project or agent that will use it (e.g. "ojw-swarm").</span></span>
       <input type="text" name="name" required placeholder="e.g. ojw-swarm" maxlength="100">
-      <span class="help-text">A short label for this key so you can tell it apart on the dashboard. Use something that describes the project or agent that will use it.</span>
     </label>
 
     <label>
-      <span class="tooltip">Anthropic API key<span class="tooltip-content">Your real sk-ant-... credential from console.anthropic.com. Tourniquet stores it encrypted on this machine and never sends it anywhere except Anthropic itself.</span></span>
+      <span class="tooltip">Anthropic API key<span class="tooltip-content">Your sk-ant-... credential from console.anthropic.com. Stored encrypted on this machine; never sent anywhere except Anthropic itself.</span></span>
       <input type="password" name="anthropic_key" required placeholder="sk-ant-...">
-      <span class="help-text">Your <code>sk-ant-…</code> key from <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. Stored encrypted on this machine; never sent anywhere except Anthropic itself.</span>
     </label>
 
     <label>
-      <span class="tooltip">Daily cap<span class="tooltip-content">The maximum dollars Tourniquet will let this key spend per day. Resets automatically at midnight UTC each night.</span></span> ({{ currency }})
+      <span class="tooltip">Daily cap ({{ currency }})<span class="tooltip-content">Maximum dollars this key can spend per day. Resets at midnight UTC. Type values in DOLLARS — `1` means $1.00, `0.50` means 50 cents, `0.01` means 1 cent.</span></span>
       <input type="number" name="daily_cap" value="5.00" min="0.01" step="0.01" required>
-      <span class="help-text">Maximum dollars this key can spend today. Type <code>1</code> for $1, <code>0.50</code> for 50 cents. Resets at midnight UTC.</span>
-      <div class="warning-callout">
-        Type dollars, not cents. <code>1</code> means $1.00 and <code>0.01</code> means 1 cent — not $1.
-      </div>
     </label>
 
     <label>
-      <span class="tooltip">Profile<span class="tooltip-content">Controls what happens when this key hits the cap. "standard" blocks requests; "monitor" only alerts; "aggressive" starts limiting earlier.</span></span>
+      <span class="tooltip">Profile<span class="tooltip-content">Controls what happens when this key hits the cap. "standard" blocks requests; "monitor" only alerts; "aggressive" starts limiting earlier. Start with "standard" if unsure.</span></span>
       <select name="profile" id="profile-select" onchange="updateProfileHelp()">
         {% for name, p in profiles_obj.items() %}
         <option value="{{ name }}"{% if name == "standard" %} selected{% endif %}>{{ name }} — {{ p.description }}</option>
         {% endfor %}
       </select>
-      <div class="help-block" id="profile-help">
-        <strong>standard:</strong> {{ profiles_obj.standard.description }} <em>Pick this if {{ profiles_obj.standard.pick_me_if }}</em>
-      </div>
-      <span class="help-text">Preset behaviour. "standard" blocks at the cap; "monitor" just alerts; "aggressive" kills earlier. Start with "standard" if you're unsure.</span>
     </label>
     <script>
-      const profileHelp = {
-        {% for name, p in profiles_obj.items() %}
-        "{{ name }}": "<strong>{{ name }}:</strong> {{ p.description }} <em>Pick this if {{ p.pick_me_if }}</em>",
-        {% endfor %}
-      };
-      function updateProfileHelp() {
-        const v = document.getElementById('profile-select').value;
-        document.getElementById('profile-help').innerHTML = profileHelp[v] || '';
-      }
+      // Kept as a no-op so the inline `onchange="updateProfileHelp()"` doesn't
+      // throw — the visible help block was removed in favour of the tooltip.
+      function updateProfileHelp() {}
     </script>
 
     <label class="checkbox-label">
       <input type="checkbox" name="kill_enabled" value="true" checked
              onchange="confirmKillDisable(this)">
-      Enable kill switch
-      <span class="help-inline">🛡 Recommended ON. Disabling means alerts only — no enforcement.</span>
+      <span class="tooltip">Enable kill switch<span class="tooltip-content">Recommended ON. When enabled, Tourniquet blocks API requests once spend hits the cap. When OFF, it alerts you but doesn't stop anything — your agents keep running and billing.</span></span>
     </label>
     <script>
       function confirmKillDisable(cb) {

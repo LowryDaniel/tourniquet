@@ -37,6 +37,23 @@ templates.env.filters["format_money_filter"] = lambda cents: format_money(
 )
 
 
+def _static_version() -> str:
+    """Return a cache-buster suffix for CSS/JS links.
+
+    Uses the mtime of main.css so any change to the stylesheet during development
+    forces browsers to refetch on the next page load — no hard refresh needed.
+    Also rotates each server start (mtime changes when files are touched).
+    """
+    try:
+        css = Path(__file__).resolve().parent.parent / "static" / "css" / "main.css"
+        return str(int(css.stat().st_mtime))
+    except OSError:
+        return "1"
+
+
+templates.env.globals["static_version"] = _static_version
+
+
 def _device_label(request: Request) -> str:
     """Map the User-Agent to a human label for the trust badge."""
     ua = request.headers.get("user-agent", "")
