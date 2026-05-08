@@ -616,7 +616,23 @@ console.log(resp.content[0].text);</pre>
       <details>
         <summary>What happens if my laptop sleeps?</summary>
         <div class="faq-answer">
-          The proxy idles. Outbound long-poll connections (Telegram, Slack Socket Mode) drop, queue up at the provider, and reconnect when the laptop wakes. In-flight requests fail gracefully. If you need 24/7 enforcement, run Tourniquet on a Raspberry Pi or a small cloud VM — same package, same <code>tourniquet start</code> command.
+          <p><strong>Tourniquet sleeps when your laptop sleeps.</strong> The proxy process is suspended with the OS — it can't enforce caps, send alerts, or receive button taps until the laptop wakes.</p>
+
+          <p>What that means in practice:</p>
+          <ul>
+            <li>Agents pointed at <code>http://localhost:8787</code> get connection refused. No requests reach Anthropic — so you can't be billed for spend that doesn't happen.</li>
+            <li>Slack and Telegram alerts you tapped from your phone during sleep get queued at the provider and apply automatically when the laptop wakes.</li>
+            <li>Today's spend total, audit log, and lifted caps survive sleep — it's all in your local SQLite DB. Nothing resets.</li>
+            <li><strong>Caveat:</strong> if any agent on the machine still has the raw <code>sk-ant-</code> key (env var, secret manager, hardcoded fallback), it can hit Anthropic directly while Tourniquet is asleep. Tourniquet only protects requests that go through it.</li>
+          </ul>
+
+          <p><strong>Want it always on?</strong> Run with <code>caffeinate</code> — a built-in macOS command that prevents sleep while Tourniquet is running:</p>
+
+          <pre class="faq-snippet">caffeinate -di tourniquet start</pre>
+
+          <p>The laptop screen can still go dark; only sleep is blocked. Stop the proxy with <code>Ctrl+C</code> and the laptop sleeps normally again.</p>
+
+          <p>For 24/7 enforcement without keeping a laptop awake, run Tourniquet on a Raspberry Pi, NUC, or small cloud VM. Same <code>pip install</code>, same <code>tourniquet start</code>; point your agents at that machine's IP instead of <code>localhost</code>.</p>
         </div>
       </details>
 

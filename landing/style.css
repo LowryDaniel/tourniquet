@@ -1000,6 +1000,24 @@ h3 { font-size: 1rem; font-weight: 700; }
   color: var(--accent);
 }
 
+.faq-answer p { margin: 0 0 0.75rem; }
+.faq-answer ul { margin: 0.5rem 0 1rem; padding-left: 1.25rem; }
+.faq-answer li { margin-bottom: 0.4rem; }
+
+.faq-answer .faq-snippet {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: rgba(5, 8, 17, 0.70);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--accent);
+  margin: 0.5rem 0 1rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 /* ── Footer ── */
 footer {
   border-top: 1px solid rgba(255,255,255,0.06);
