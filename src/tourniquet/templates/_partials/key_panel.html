@@ -19,6 +19,10 @@
   {# Controls #}
   {% include "_partials/control_panel.html" %}
 
+  {# Integration snippets — env-var setup for Claude Code / Cursor / Python / Node / curl,
+     visible after creation since key_rotated.html only shows once #}
+  {% include "_partials/integration_snippets.html" %}
+
   {# Alert log — polls every 30s #}
   {% include "_partials/alerts_log.html" %}
 

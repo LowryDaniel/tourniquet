@@ -247,6 +247,56 @@ def _alert_channel_status() -> dict[str, dict[str, Any]]:
     }
 
 
+def _sleep_protection_status() -> dict[str, Any]:
+    """Detect whether something is preventing the OS from sleeping.
+
+    On macOS we shell out to `pmset -g assertions` and check for an active
+    PreventUserIdleSystemSleep assertion (which `caffeinate -di` creates). On
+    Linux/server platforms sleep isn't a concern in the same way, so we
+    report a generic 'always on' state.
+
+    Returns a dict consumed by the Getting Started checklist:
+      platform: 'darwin' | 'linux' | 'windows' | 'other'
+      active:   True if something is keeping the system awake
+      owner:    short label describing the wake-lock holder, when known
+    """
+    import platform
+    import subprocess
+
+    sysname = platform.system().lower()
+    if sysname == "darwin":
+        try:
+            result = subprocess.run(
+                ["pmset", "-g", "assertions"],
+                capture_output=True, text=True, timeout=2, check=False,
+            )
+            output = result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return {"platform": "darwin", "active": False, "owner": ""}
+
+        active = False
+        owner = ""
+        for line in output.splitlines():
+            stripped = line.strip()
+            if "PreventUserIdleSystemSleep" in stripped and stripped.endswith(" 1"):
+                active = True
+            elif active and "named:" in stripped.lower():
+                # The line right after a positive assertion lists who holds it.
+                # Format: "   pid 12345(caffeinate): named: \"...\""
+                if "caffeinate" in stripped.lower():
+                    owner = "caffeinate"
+                else:
+                    owner = stripped.split("(", 1)[-1].split(")", 1)[0] if "(" in stripped else "unknown process"
+                break
+        return {"platform": "darwin", "active": active, "owner": owner}
+
+    if sysname in ("linux",):
+        # Servers/Pis/containers don't auto-sleep; treat as always-on by default.
+        return {"platform": "linux", "active": True, "owner": "no idle-sleep on this OS"}
+
+    return {"platform": sysname or "other", "active": False, "owner": ""}
+
+
 async def _get_action_history(
     key_id: uuid.UUID, session: AsyncSession, limit: int = 50,
 ) -> list[dict[str, Any]]:
@@ -370,6 +420,7 @@ async def dashboard(request: Request) -> HTMLResponse:
         "profiles_obj": PROFILES,
         "currency": settings.display_currency,
         "channel_status": _alert_channel_status(),
+        "sleep_protection": _sleep_protection_status(),
         **panel_ctx,
     })
 
@@ -432,6 +483,7 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
     ctx["keys"] = summaries
     ctx["selected_id"] = str(key_id)
     ctx["channel_status"] = _alert_channel_status()
+    ctx["sleep_protection"] = _sleep_protection_status()
     return templates.TemplateResponse(request, "dashboard.html", ctx)
 
 

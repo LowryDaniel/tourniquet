@@ -60,9 +60,39 @@
             <span class="channel-tier muted">— optional, for Zapier / n8n / Home Assistant</span>
           {% endif %}
         </li>
+        <li id="checklist-always-on" class="{% if sleep_protection.active %}done{% endif %}">
+          Always-on enforcement
+          {% if sleep_protection.active %}
+            <span class="channel-tier">—
+              {% if sleep_protection.platform == 'darwin' %}
+                {{ sleep_protection.owner or 'something' }} is keeping this Mac awake
+              {% else %}
+                {{ sleep_protection.owner }}
+              {% endif %}
+            </span>
+          {% elif sleep_protection.platform == 'darwin' %}
+            <button type="button" class="btn-small" onclick="document.getElementById('always-on-guide').open = true; document.getElementById('always-on-guide').scrollIntoView({behavior:'smooth',block:'start'})">Show how</button>
+          {% else %}
+            <span class="channel-tier muted">— always-on by default on this OS</span>
+          {% endif %}
+        </li>
       </ul>
       <p class="help-text">Complete the items above to make sure you get notified before spending reaches your cap. You can dismiss any channel you don't want.</p>
     </div>
+
+    {% if sleep_protection.platform == 'darwin' and not sleep_protection.active %}
+    <details id="always-on-guide" class="glass-panel always-on-panel">
+      <summary>Keep Tourniquet running while this Mac sleeps</summary>
+      <div class="always-on-body">
+        <p>By default macOS sleeps after a few minutes of inactivity, which suspends Tourniquet. Run it with <code>caffeinate</code> instead to block sleep while the proxy is up:</p>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>caffeinate -di tourniquet start</code></pre>
+        </div>
+        <p>The screen can still dim — only sleep is blocked. Stop the proxy with <code>Ctrl+C</code> in that terminal, or <code>pkill caffeinate</code> from another. To keep going without a laptop awake at all, see the <a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/deploy.md" target="_blank" rel="noopener noreferrer">24/7 deployment guide</a> for Pi / Proxmox / Docker / cloud VM.</p>
+      </div>
+    </details>
+    {% endif %}
 
     {# ── Setup guides — collapsed by default ── #}
     <div id="setup-guides-container">

@@ -1,0 +1,120 @@
+{# Integration snippets — accessible re-render of the env-var instructions
+   that key_rotated.html shows once on key creation. The token itself can't
+   be recovered (only the bcrypt hash is stored), so snippets use the
+   placeholder `tq_YOUR_TOKEN` and a hint to Rotate if the user lost theirs. #}
+{% set proxy_url = "http://" + (request.url.netloc if request else "127.0.0.1:8787") %}
+
+<div class="glass-panel integration-snippets-panel" id="integration-snippets-{{ key_id }}">
+  <details>
+    <summary>
+      <span class="integration-summary-text">Use this key in your tools</span>
+      <span class="integration-summary-hint">Show env-var snippets for Claude Code, Cursor, Python, Node, curl, PowerShell</span>
+    </summary>
+    <div class="integration-body">
+      <p class="muted-hint">
+        Set these two env vars and any Anthropic-compatible client will route through Tourniquet on this machine.
+        Replace <code>tq_YOUR_TOKEN</code> with the token you saved when you created or last rotated this key.
+        <strong>Lost your token?</strong> Hit <strong>Rotate</strong> in the Control panel above to mint a fresh one — the old one stops working immediately.
+      </p>
+
+      <details class="integration-snippet">
+        <summary>Claude Code (bash / zsh)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>export ANTHROPIC_BASE_URL={{ proxy_url }}
+export ANTHROPIC_API_KEY=tq_YOUR_TOKEN
+claude</code></pre>
+        </div>
+        <p class="muted-hint">Add the two <code>export</code> lines to your <code>~/.zshrc</code> or <code>~/.bashrc</code> to persist across shells.</p>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>Cursor (any platform)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>ANTHROPIC_BASE_URL={{ proxy_url }}
+ANTHROPIC_API_KEY=tq_YOUR_TOKEN</code></pre>
+        </div>
+        <p class="muted-hint">Cursor Settings → Cursor Settings → Models → set Custom Anthropic API Key. Or set both as environment variables before launching Cursor.</p>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>Python SDK (anthropic)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>import anthropic
+
+client = anthropic.Anthropic(
+    api_key="tq_YOUR_TOKEN",
+    base_url="{{ proxy_url }}",
+)
+
+resp = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "hi"}],
+)
+print(resp.content[0].text)</code></pre>
+        </div>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>Node SDK (@anthropic-ai/sdk)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  apiKey: "tq_YOUR_TOKEN",
+  baseURL: "{{ proxy_url }}",
+});
+
+const resp = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 100,
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(resp.content[0].text);</code></pre>
+        </div>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>curl (smoke test, ~1 cent)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>curl -s -N -X POST {{ proxy_url }}/v1/messages \
+  -H "authorization: Bearer tq_YOUR_TOKEN" \
+  -H "content-type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":50,"messages":[{"role":"user","content":"say hi in 5 words"}]}'</code></pre>
+        </div>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>PowerShell (Windows)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>$env:ANTHROPIC_BASE_URL = "{{ proxy_url }}"
+$env:ANTHROPIC_API_KEY  = "tq_YOUR_TOKEN"</code></pre>
+        </div>
+        <p class="muted-hint">Add to your <code>$PROFILE</code> file to persist across sessions. Revert with <code>Remove-Item Env:ANTHROPIC_BASE_URL, Env:ANTHROPIC_API_KEY</code>.</p>
+      </details>
+
+      <details class="integration-snippet">
+        <summary>cmd.exe (Windows)</summary>
+        <div class="copy-block">
+          <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+          <pre><code>set ANTHROPIC_BASE_URL={{ proxy_url }}
+set ANTHROPIC_API_KEY=tq_YOUR_TOKEN</code></pre>
+        </div>
+        <p class="muted-hint">Use <code>setx</code> instead of <code>set</code> to persist permanently.</p>
+      </details>
+
+      <p class="muted-hint" style="margin-top:1rem;">
+        <strong>Safety net:</strong> if Tourniquet ever stops, unset the env vars and your agent falls back to direct Anthropic with whatever key you originally had set.<br>
+        bash/zsh: <code>unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY</code><br>
+        PowerShell: <code>Remove-Item Env:ANTHROPIC_BASE_URL, Env:ANTHROPIC_API_KEY</code>
+      </p>
+    </div>
+  </details>
+</div>
