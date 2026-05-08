@@ -20,7 +20,8 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
+from typing import Any
 
 from tourniquet.billing.formatting import format_money
 from tourniquet.config import settings
@@ -110,6 +111,143 @@ def _format_message(event: AlertEvent) -> str:
         f"⚠️ Tourniquet: {event.api_key_name} — at {event.threshold_pct}%. "
         f"{spent}/{cap} today."
     )
+
+
+def _select_threshold(spent_cents: int, cap_cents: int, last_fired_pct: int | None) -> int | None:
+    """Decide which threshold (50/80/-1) to fire now, or None if nothing to do.
+
+    Each level fires AT MOST ONCE per key per day. The proxy hot path passes
+    `last_fired_pct` from the audit log; we only return a level that's strictly
+    higher than what's already fired today.
+
+    Returns:
+        -1   when spent ≥ cap and a cap-hit alert hasn't fired yet today
+        80   when spent ≥ 80% of cap and the 80 alert hasn't fired
+        50   when spent ≥ 50% of cap and the 50 alert hasn't fired
+        None otherwise
+    """
+    if cap_cents <= 0:
+        return None
+    # Cap hit takes priority — only fire once per day
+    if spent_cents >= cap_cents:
+        return -1 if last_fired_pct != -1 else None
+    # `last_fired_pct == -1` means cap-hit already fired (somehow spend dropped?
+    # impossible during normal incrementing, but be defensive). Don't downgrade.
+    if last_fired_pct == -1:
+        return None
+    pct = (spent_cents * 100) // cap_cents
+    for level in (80, 50):
+        if pct >= level and (last_fired_pct is None or last_fired_pct < level):
+            return level
+    return None
+
+
+async def _last_fired_threshold_today(api_key_id: Any, today: date, session: Any) -> int | None:
+    """Look at the audit log for the most recent threshold fired today.
+
+    Returns the `threshold_pct` from the latest `alert_fired` action recorded
+    today, or None if no alert has fired yet. Used by `_maybe_fire_threshold_alert`
+    to avoid re-firing the same level twice.
+    """
+    from sqlalchemy import desc, select
+
+    from tourniquet.models import ApiKeyAction
+
+    today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    result = await session.execute(
+        select(ApiKeyAction)
+        .where(
+            ApiKeyAction.api_key_id == api_key_id,
+            ApiKeyAction.action == "alert_fired",
+            ApiKeyAction.created_at >= today_start,
+        )
+        .order_by(desc(ApiKeyAction.created_at))
+        .limit(1)
+    )
+    last = result.scalar_one_or_none()
+    if last is None:
+        return None
+    details = last.details or {}
+    return details.get("threshold_pct")
+
+
+async def maybe_fire_threshold_alert(
+    api_key: Any,
+    spent_cents: int,
+    cap_cents: int,
+    today: date,
+    *,
+    kill_enabled: bool,
+    session: Any,
+) -> int | None:
+    """Fire a threshold alert if spend has crossed a new level today.
+
+    Called from the proxy hot path right after add_spend(). Designed to be:
+      • idempotent — records the audit row before dispatching, so a retry
+        won't double-alert even if fan_out is interrupted
+      • non-blocking — alert delivery runs as a background asyncio task so
+        the proxy response isn't held up by Slack/Telegram round-trips
+      • silent on failure — any error (including audit failure) is logged
+        and swallowed; the proxy must not break because alerts misbehaved
+
+    Returns the threshold level fired (-1 / 80 / 50) or None if no alert
+    fired. Returned value is mostly for tests.
+    """
+    try:
+        last_fired = await _last_fired_threshold_today(api_key.id, today, session)
+        threshold = _select_threshold(spent_cents, cap_cents, last_fired)
+        if threshold is None:
+            return None
+
+        # Build the event. Recovery offer (post-kill +$N buttons) only makes
+        # sense when kill_enabled=True AND we just hit the cap — otherwise
+        # the key isn't actually blocked, so "want to bump to continue?" is
+        # the wrong prompt.
+        event = AlertEvent(
+            api_key_name=api_key.name,
+            threshold_pct=threshold,
+            spent_usd_cents=spent_cents,
+            cap_usd_cents=cap_cents,
+            display_currency=settings.display_currency,
+            today=today,
+            api_key_id=str(api_key.id),
+            alert_email=getattr(api_key, "alert_email", None),
+            recovery_offer=(threshold == -1 and kill_enabled),
+        )
+
+        # Record FIRST so a future retry sees the level and doesn't re-fire.
+        # The proxy commits this audit row alongside the spend write, so they
+        # land atomically.
+        from tourniquet.audit import ACTION_ALERT_FIRED, SOURCE_PROXY, record_action
+        await record_action(
+            session, api_key.id, ACTION_ALERT_FIRED, SOURCE_PROXY,
+            f"Alert fired at {'cap-hit' if threshold == -1 else f'{threshold}%'} "
+            f"(spent ${spent_cents / 100:.2f} / ${cap_cents / 100:.2f})",
+            details={
+                "threshold_pct": threshold,
+                "spent_cents": spent_cents,
+                "cap_cents": cap_cents,
+                "kill_enabled": kill_enabled,
+            },
+        )
+
+        # Background dispatch — proxy returns to the user without waiting.
+        # `fan_out` itself returns per-channel statuses but we don't need them
+        # here; logs from each channel will surface failures.
+        async def _dispatch():
+            try:
+                await fan_out(event, kill_enabled=kill_enabled)
+            except Exception:
+                log.exception("Background alert fan_out failed for key %s", api_key.id)
+
+        asyncio.create_task(_dispatch())
+        return threshold
+    except Exception:
+        # Never let an alert-path failure break the proxy. The cap-check has
+        # already happened — the request either passed or got 402'd before we
+        # got here.
+        log.exception("maybe_fire_threshold_alert failed for key %s", getattr(api_key, "id", "?"))
+        return None
 
 
 async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, str]:

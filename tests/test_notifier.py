@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import pathlib
 import sys
@@ -447,3 +448,192 @@ async def test_webhook_url_not_in_logs(
     full_log = " ".join(r.message for r in caplog.records)
     assert "SECRET_TOKEN_HERE" not in full_log
     assert secret_url not in full_log
+
+
+# ── _select_threshold — pure logic, no DB ──────────────────────────────────────
+# Each level (50%, 80%, cap-hit) fires AT MOST ONCE per day. The proxy hot path
+# uses this to decide whether to alert after each request.
+
+class TestSelectThreshold:
+    def test_below_50_percent_no_alert(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        assert _select_threshold(spent_cents=200, cap_cents=500, last_fired_pct=None) is None
+
+    def test_crossing_50_fires_50(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        # 250/500 = 50%
+        assert _select_threshold(250, 500, None) == 50
+
+    def test_crossing_80_fires_80_when_50_already_fired(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        # 400/500 = 80% — last was 50, so fire 80
+        assert _select_threshold(400, 500, 50) == 80
+
+    def test_50_does_not_refire_when_50_already_fired(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        # 300/500 = 60% — last was 50, so 50 is "done"; haven't hit 80 yet
+        assert _select_threshold(300, 500, 50) is None
+
+    def test_cap_hit_fires_minus_one(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        assert _select_threshold(500, 500, 80) == -1
+        assert _select_threshold(600, 500, 80) == -1  # over-cap also fires -1
+
+    def test_cap_hit_does_not_refire(self):
+        from tourniquet.alerts.notifier import _select_threshold
+        assert _select_threshold(700, 500, -1) is None
+
+    def test_crossing_directly_to_cap_skips_50_80(self):
+        """A single big request can take you from 0 → cap. Cap-hit fires immediately."""
+        from tourniquet.alerts.notifier import _select_threshold
+        assert _select_threshold(500, 500, None) == -1
+
+    def test_zero_cap_no_alert(self):
+        """Defensive: if cap is somehow 0, don't divide-by-zero or fire."""
+        from tourniquet.alerts.notifier import _select_threshold
+        assert _select_threshold(100, 0, None) is None
+
+
+# ── maybe_fire_threshold_alert — integration with fake session ────────────────
+# Verifies the helper records an audit row before dispatching, and returns the
+# fired level so callers (or tests) can confirm what happened.
+
+@pytest.mark.asyncio
+async def test_maybe_fire_threshold_alert_records_audit_and_dispatches():
+    from datetime import date as _date
+    from unittest.mock import AsyncMock, MagicMock
+    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+
+    api_key = MagicMock()
+    api_key.id = "00000000-0000-0000-0000-000000000001"
+    api_key.name = "test-key"
+    api_key.alert_email = None
+
+    # Fake session with a working .add() and an .execute() that returns "no
+    # prior alerts today" — so the helper concludes nothing has fired yet.
+    session = MagicMock()
+    session.add = MagicMock()
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none = MagicMock(return_value=None)
+    session.execute = AsyncMock(return_value=fake_result)
+
+    # Patch fan_out so we can assert it was called without actually dispatching
+    # to real channels.
+    with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
+        threshold = await maybe_fire_threshold_alert(
+            api_key,
+            spent_cents=400,  # 80% of 500
+            cap_cents=500,
+            today=_date(2026, 5, 8),
+            kill_enabled=True,
+            session=session,
+        )
+        # Yield once so the asyncio.create_task background task can run
+        await asyncio.sleep(0)
+
+    assert threshold == 80
+    # Audit row was added inside the same session (so it commits with the spend)
+    assert session.add.called
+    added = session.add.call_args[0][0]
+    assert added.action == "alert_fired"
+    assert added.source == "proxy"
+    assert added.details["threshold_pct"] == 80
+    # Background task fired fan_out
+    assert mock_fanout.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_maybe_fire_threshold_alert_no_op_when_already_fired():
+    """If the audit log already has an 80% alert today, don't refire."""
+    from datetime import date as _date
+    from unittest.mock import AsyncMock, MagicMock
+    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+
+    api_key = MagicMock()
+    api_key.id = "00000000-0000-0000-0000-000000000002"
+    api_key.name = "test-key"
+    api_key.alert_email = None
+
+    # Fake prior audit row with threshold_pct=80
+    prior = MagicMock()
+    prior.details = {"threshold_pct": 80}
+
+    session = MagicMock()
+    session.add = MagicMock()
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none = MagicMock(return_value=prior)
+    session.execute = AsyncMock(return_value=fake_result)
+
+    with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
+        threshold = await maybe_fire_threshold_alert(
+            api_key, 410, 500, _date(2026, 5, 8),
+            kill_enabled=True, session=session,
+        )
+        await asyncio.sleep(0)
+
+    assert threshold is None
+    assert not session.add.called  # no new audit row
+    assert mock_fanout.await_count == 0  # no dispatch
+
+
+@pytest.mark.asyncio
+async def test_maybe_fire_threshold_alert_cap_hit_with_kill_offers_recovery():
+    """Cap-hit alert with kill_enabled=True should set recovery_offer=True so
+    the channels render +$N bump buttons."""
+    from datetime import date as _date
+    from unittest.mock import AsyncMock, MagicMock
+    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+
+    api_key = MagicMock()
+    api_key.id = "00000000-0000-0000-0000-000000000003"
+    api_key.name = "test-key"
+    api_key.alert_email = None
+
+    session = MagicMock()
+    session.add = MagicMock()
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none = MagicMock(return_value=None)
+    session.execute = AsyncMock(return_value=fake_result)
+
+    with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
+        threshold = await maybe_fire_threshold_alert(
+            api_key, 500, 500, _date(2026, 5, 8),
+            kill_enabled=True, session=session,
+        )
+        await asyncio.sleep(0)
+
+    assert threshold == -1
+    # The event passed to fan_out should have recovery_offer=True
+    event_arg = mock_fanout.await_args.args[0]
+    assert event_arg.recovery_offer is True
+    assert event_arg.threshold_pct == -1
+
+
+@pytest.mark.asyncio
+async def test_maybe_fire_threshold_alert_monitor_mode_no_recovery():
+    """In monitor mode (kill_enabled=False), cap-hit alert fires but
+    recovery_offer must stay False — the key isn't actually blocked."""
+    from datetime import date as _date
+    from unittest.mock import AsyncMock, MagicMock
+    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+
+    api_key = MagicMock()
+    api_key.id = "00000000-0000-0000-0000-000000000004"
+    api_key.name = "test-key"
+    api_key.alert_email = None
+
+    session = MagicMock()
+    session.add = MagicMock()
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none = MagicMock(return_value=None)
+    session.execute = AsyncMock(return_value=fake_result)
+
+    with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
+        await maybe_fire_threshold_alert(
+            api_key, 500, 500, _date(2026, 5, 8),
+            kill_enabled=False, session=session,
+        )
+        await asyncio.sleep(0)
+
+    event_arg = mock_fanout.await_args.args[0]
+    assert event_arg.recovery_offer is False  # no recovery in monitor mode

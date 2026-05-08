@@ -263,6 +263,20 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 )
                 write_session.add(event)
                 await add_spend(api_key.id, today, cost, write_session)
+                # Threshold-alert wiring — fire 50%/80%/cap-hit alerts at most
+                # once per day per key. Audit row is written to the same
+                # session so it commits atomically with the spend.
+                # Background fan_out task is spawned so the proxy response
+                # isn't held up by Slack/Telegram round-trips.
+                from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+                await maybe_fire_threshold_alert(
+                    api_key,
+                    spent_cents + cost,
+                    cap_cents,
+                    today,
+                    kill_enabled=api_key.kill_enabled,
+                    session=write_session,
+                )
                 await write_session.commit()
 
             return Response(
@@ -316,6 +330,18 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     )
                     write_session.add(event)
                     await add_spend(api_key.id, today, c, write_session)
+                    # Threshold-alert wiring (streaming path) — same idempotency
+                    # guarantees as the non-streaming path. Sees the spend
+                    # *after* this stream's contribution.
+                    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+                    await maybe_fire_threshold_alert(
+                        api_key,
+                        spent_cents + c,
+                        cap_cents,
+                        today,
+                        kill_enabled=api_key.kill_enabled,
+                        session=write_session,
+                    )
                     await write_session.commit()
 
         return StreamingResponse(

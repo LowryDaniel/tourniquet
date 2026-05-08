@@ -1,5 +1,34 @@
 # Errors & fixes
 
+## 2026-05-08 — LAUNCH BLOCKER: proxy never invoked fan_out, so real cap-hits never alerted
+
+**What failed:** A `git grep fan_out` showed `fan_out` was only called from `cli.py::cmd_test_alerts` (the synthetic smoke-test command). The production proxy hot path (`/v1/messages` in `proxy/router.py`) wrote `usage_events` and called `add_spend()` but never fired alerts when spend crossed 50%/80%/cap. End users would have got desktop banners and Telegram/Slack pings *only* if they ran `tourniquet test-alerts` by hand. Real spend going past their cap silently went past — which defeats the entire product.
+
+**Root cause:** Earlier work built the alert pipeline (`fan_out`, channel renderers, recovery flow) bottom-up but never wired it into the proxy's write path. The plumbing was in place; nobody pulled the lever.
+
+**Fix:** New `notifier.maybe_fire_threshold_alert()` helper called from BOTH proxy write sites (non-streaming JSON path and streaming SSE path) right after `add_spend()` and inside the same session as the spend write. Helper:
+- queries the audit log (`api_key_actions` where `action='alert_fired'` AND `created_at >= today_start_utc`) for the highest threshold already fired today
+- decides via pure `_select_threshold()` whether to fire (50/80/-1, or no-op)
+- records an `alert_fired` audit row in the same session (so it commits atomically with the spend — proves idempotency)
+- spawns `asyncio.create_task(fan_out(...))` so the proxy response isn't held up by Slack/Telegram round-trips
+- swallows ALL exceptions: alert-path failures must NEVER break the proxy
+
+Recovery offer (post-cap-hit "+$N to continue?" prompt) is set on the `AlertEvent` only when `threshold == -1 AND kill_enabled=True` — monitor-mode users who hit cap don't see recovery options because their requests aren't actually blocked.
+
+**Files touched:** `src/tourniquet/alerts/notifier.py` (new helper + `_select_threshold` pure function + `_last_fired_threshold_today`), `src/tourniquet/proxy/router.py` (two new call sites), `tests/test_notifier.py` (12 new tests covering the threshold-selection logic + 4 integration tests for the helper).
+
+**Verification:** 175 passed, 3 skipped. Targeted: `TestSelectThreshold` covers 8 cases including direct cap-hit jumps from 0%, zero-cap defence, and idempotency of each level.
+
+## 2026-05-08 — Postgres deployments would 500 on `api_key_actions` queries (no migration)
+
+**What failed:** `ApiKeyAction` was added as a model and `Base.metadata.create_all()` auto-created it on SQLite local dev — so Dan's machine was fine. But Postgres production deployments use alembic migrations as the schema source of truth, and there was no migration for the new table. Any Postgres user running `alembic upgrade head` after pulling would not get the table, and the dashboard's `/dashboard/key/<id>/history` plus the proxy's threshold-alert helper would 500 on first query.
+
+**Fix:** New migration `migrations/versions/0002_api_key_actions.py` with `down_revision="0001"`. Creates the table with two indexes — `ix_api_key_actions_api_key_id` and `ix_api_key_actions_created_at` — matching the access pattern of the dashboard route (filter by key, order by ts desc).
+
+**Files touched:** `migrations/versions/0002_api_key_actions.py` (new).
+
+**Verification:** Migration file syntactically valid (alembic loads it; revision graph 0001 → 0002 is linear). Postgres-side dry-run is left to the user — `ABSOLUTE_CEILING_USD_CENTS=…` only impacts SQLite locally, the production Postgres path won't be exercised until someone deploys.
+
 ## 2026-05-08 — Kill-now permanently destroyed the user's configured daily_cap
 
 **What failed:** Tapping "🛑 Kill now" from any channel (Slack/Telegram/web) clamped `daily_cap_usd_cents` to today's spend (or 1¢ when spend was 0). The clamp was permanent — `daily_cap` is the persistent baseline, so tomorrow's quota was also destroyed. Dan flagged it after his Test_1 key got stuck at $0.01: he'd configured $1, killed it during testing, and couldn't understand why it had become 1¢ until I traced the kill chain.
