@@ -5,16 +5,19 @@
   --bg: #080c17;
   --bg-deep: #050811;
 
-  /* Glass surfaces */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  /* Glass surfaces — subtle ice-blue tint so every panel reads as part of
+     the same family. The inset white highlight in --glass-shadow stays
+     white because it represents specular reflection on glass, not surface. */
+  --glass-bg: rgba(79, 195, 247, 0.04);
+  --glass-bg-hover: rgba(79, 195, 247, 0.08);
   --glass-blur: 20px;
   --glass-shadow: 0 4px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10);
   --glass-shadow-sm: 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
 
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(255, 255, 255, 0.18);
+  /* Borders — ice-blue tinted; opacities tuned so they read as cleanly as
+     the previous white borders on the dark gradient. */
+  --border: rgba(79, 195, 247, 0.18);
+  --border-strong: rgba(79, 195, 247, 0.30);
 
   /* Text */
   --fg: #e8eaf6;
@@ -74,7 +77,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-
 }
 
 section { padding: 6rem 0; }
-section + section { border-top: 1px solid rgba(255,255,255,0.06); }
+section + section { border-top: 1px solid rgba(79,195,247,0.10); }
 
 /* ── Glass panel mixin ── */
 .glass-panel {
@@ -249,7 +252,7 @@ h1 em {
 .terminal-wrap {
   border-radius: var(--radius-sm);
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(79,195,247,0.22);
   box-shadow: var(--glass-shadow);
   background: rgba(5,8,17,0.7);
   -webkit-backdrop-filter: blur(12px);
@@ -257,12 +260,12 @@ h1 em {
 }
 
 .terminal-bar {
-  background: rgba(255,255,255,0.05);
+  background: rgba(79,195,247,0.05);
   padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(79,195,247,0.18);
 }
 
 .terminal-dot {
@@ -448,7 +451,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   font-size: 0.78rem;
   color: rgba(232,234,246,0.4);
   padding-top: 0.5rem;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(79,195,247,0.14);
 }
 
 .incident-source a {
@@ -485,7 +488,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   transition: border-color var(--transition);
 }
 
-.step:hover { border-color: rgba(255,255,255,0.18); }
+.step:hover { border-color: rgba(79,195,247,0.30); }
 
 .step-icon {
   font-size: 1.75rem;
@@ -506,7 +509,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   display: inline-block;
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: rgba(255,255,255,0.06);
+  background: rgba(79,195,247,0.07);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 0.05em 0.4em;
@@ -543,7 +546,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 .section-lede code {
   font-family: var(--font-mono);
   font-size: 0.88em;
-  background: rgba(255,255,255,0.06);
+  background: rgba(79,195,247,0.07);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 0.1rem 0.4rem;
@@ -557,10 +560,10 @@ h3 { font-size: 1rem; font-weight: 700; }
 }
 
 .dashboard-card {
-  background: rgba(255,255,255,0.05);
+  background: rgba(79,195,247,0.05);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(79,195,247,0.18);
   border-radius: 16px;
   padding: 1.5rem;
   box-shadow:
@@ -648,7 +651,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  background: rgba(255,255,255,0.04);
+  background: rgba(79,195,247,0.04);
   border-bottom: 1px solid var(--border);
 }
 
@@ -730,7 +733,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 .always-on-hint-body code {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(79, 195, 247, 0.10);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.1em 0.4em;
@@ -846,7 +849,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  background: rgba(255,255,255,0.04);
+  background: rgba(79,195,247,0.04);
   border-bottom: 1px solid var(--border);
 }
 
@@ -891,7 +894,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 #compare th,
 #compare td {
   padding: 0.85rem 1.1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(79,195,247,0.14);
   text-align: left;
   vertical-align: middle;
 }
@@ -901,7 +904,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   font-size: 0.8rem;
   letter-spacing: 0.03em;
   color: var(--fg-muted);
-  background: rgba(255,255,255,0.04);
+  background: rgba(79,195,247,0.04);
   white-space: nowrap;
 }
 
@@ -1045,7 +1048,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 }
 
 .faq-list details[open] {
-  border-color: rgba(255,255,255,0.15);
+  border-color: rgba(79,195,247,0.30);
 }
 
 .faq-list summary {
@@ -1085,14 +1088,14 @@ h3 { font-size: 1rem; font-weight: 700; }
   font-size: 0.925rem;
   color: var(--fg-muted);
   line-height: 1.7;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(79,195,247,0.14);
   padding-top: 1rem;
 }
 
 .faq-answer code {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: rgba(255,255,255,0.07);
+  background: rgba(79,195,247,0.10);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.1em 0.4em;
@@ -1102,7 +1105,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 
 /* ── Footer ── */
 footer {
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(79,195,247,0.14);
   padding: 2.75rem 0;
 }
 
