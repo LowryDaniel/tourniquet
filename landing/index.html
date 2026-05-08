@@ -213,7 +213,13 @@
         <div>
           <h3>Install one command</h3>
           <p>Tourniquet is a Python package with no system dependencies beyond Python 3.9+.</p>
-          <div class="step-cmd">pip install tourniquet-dev</div>
+          <div class="install-block">
+            <div class="install-header">
+              <span class="install-label">Terminal</span>
+              <button class="copy-btn" data-copy-target="step1-cmd">Copy</button>
+            </div>
+            <div class="install-code" id="step1-cmd">pip install tourniquet-dev</div>
+          </div>
         </div>
       </div>
 
@@ -222,7 +228,13 @@
         <div>
           <h3>Run it</h3>
           <p>A single command starts the proxy and opens your browser at the local dashboard. No config files to edit, no environment to learn.</p>
-          <div class="step-cmd">tourniquet</div>
+          <div class="install-block">
+            <div class="install-header">
+              <span class="install-label">Terminal</span>
+              <button class="copy-btn" data-copy-target="step2-cmd">Copy</button>
+            </div>
+            <div class="install-code" id="step2-cmd">tourniquet</div>
+          </div>
         </div>
       </div>
 
@@ -358,13 +370,44 @@
           <path d="M12 7v5l3 2"/>
         </svg>
       </div>
-      <div>
-        <p class="always-on-hint-title">Keep it running while your laptop sleeps</p>
+      <div class="always-on-hint-content">
+        <p class="always-on-hint-title">Keep it running while your computer sleeps</p>
         <p class="always-on-hint-body">
-          On macOS, prefix the run command with <code>caffeinate</code> — built-in OS command, blocks sleep but lets the screen dim. Stop with <code>Ctrl+C</code> or <code>pkill caffeinate</code>.
+          Tourniquet sleeps when your computer sleeps. Use the right command for your OS to block sleep while it runs — the screen can still dim, only sleep is held off.
         </p>
-        <pre class="always-on-hint-code">caffeinate -di tourniquet start</pre>
-        <p class="always-on-hint-body" style="margin-top:0.5rem">
+
+        <div class="always-on-os">
+          <div class="install-block">
+            <div class="install-header">
+              <span class="install-label">macOS</span>
+              <button class="copy-btn" data-copy-target="caf-mac">Copy</button>
+            </div>
+            <div class="install-code" id="caf-mac">caffeinate -di tourniquet start</div>
+          </div>
+          <p class="always-on-hint-body os-stop">Stop with <code>Ctrl+C</code> or <code>pkill caffeinate</code>.</p>
+
+          <div class="install-block">
+            <div class="install-header">
+              <span class="install-label">Linux (systemd)</span>
+              <button class="copy-btn" data-copy-target="caf-linux">Copy</button>
+            </div>
+            <div class="install-code" id="caf-linux">systemd-inhibit --what=idle:sleep tourniquet start</div>
+          </div>
+          <p class="always-on-hint-body os-stop">Stop with <code>Ctrl+C</code> — the inhibit lock is released automatically when the process exits.</p>
+
+          <div class="install-block">
+            <div class="install-header">
+              <span class="install-label">Windows (PowerShell)</span>
+              <button class="copy-btn" data-copy-target="caf-win">Copy</button>
+            </div>
+<div class="install-code" id="caf-win">$ES = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);' -Name 'ES' -Namespace 'Win32' -PassThru
+$null = $ES::SetThreadExecutionState(2147483649)
+tourniquet start</div>
+          </div>
+          <p class="always-on-hint-body os-stop">Stop with <code>Ctrl+C</code> or close the PowerShell window — the wake-lock is bound to that session, so closing it releases the lock automatically.</p>
+        </div>
+
+        <p class="always-on-hint-body" style="margin-top:1rem">
           Want true 24/7 without keeping a laptop awake? Run on a Raspberry Pi, Proxmox LXC, Docker, or a small cloud VM —
           <a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/deploy.md" target="_blank" rel="noopener noreferrer">step-by-step guide</a>.
         </p>
