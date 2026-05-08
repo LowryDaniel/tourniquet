@@ -29,7 +29,7 @@
     <dd>A preset that controls how Tourniquet behaves near and at the cap. "standard" blocks at 100%; "monitor" only alerts (no blocking); "aggressive" starts limiting earlier. Standard is the right choice for most people.</dd>
 
     <dt>ceiling / absolute_ceiling</dt>
-    <dd>The highest the cap can ever be raised to via the lift buttons, regardless of multipliers. A safety net so a runaway auto-tune or stray tap can't push spending to infinity.</dd>
+    <dd>The hard upper limit for this key — auto-tune AND the "🚀 ceiling" lift button can never push the cap above it. A safety net so a runaway auto-tune or stray tap can't drive spending to infinity. <strong>Set initially</strong> from <code>ABSOLUTE_CEILING_USD_CENTS</code> in <code>~/.tourniquet/.env</code> when the key is created (default $100/day). <strong>Edit per-key</strong> via the Ceiling input in the Control panel; it must always be ≥ daily cap.</dd>
 
     <dt>monitor mode</dt>
     <dd>Running with the "monitor" profile (or kill switch disabled). Tourniquet watches and alerts but never blocks requests. Useful for understanding your usage before you commit to hard limits.</dd>

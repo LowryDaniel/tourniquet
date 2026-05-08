@@ -96,6 +96,25 @@
       updateNudgeLabels('{{ key_id }}');
     </script>
 
+    {# Ceiling — hard upper bound auto-tune and "lift to ceiling" respect #}
+    <label class="control-label">
+      <span class="tooltip">Ceiling<span class="tooltip-content">The hard upper limit for this key. Auto-tune and the "🚀 ceiling" lift button can never push the cap above this. Default is set from ABSOLUTE_CEILING_USD_CENTS in your .env (currently ${{ '%.2f'|format(key.absolute_ceiling_usd_cents / 100) }}). Increase this if you want auto-tune room to grow; decrease only after lowering the daily cap first.</span></span>
+    </label>
+    <form class="control-row ceiling-row" id="ceiling-form-{{ key_id }}"
+          hx-post="/dashboard/key/{{ key_id }}/ceiling"
+          hx-target="#control-panel"
+          hx-swap="outerHTML"
+          hx-trigger="submit, change from:#ceiling-input-{{ key_id }}">
+      <span class="cap-prefix">$</span>
+      <input type="number" name="absolute_ceiling" id="ceiling-input-{{ key_id }}"
+             value="{{ '%.2f'|format(key.absolute_ceiling_usd_cents / 100) }}"
+             min="0.01" step="any" class="control-input cap-input"
+             inputmode="decimal"
+             onblur="document.getElementById('ceiling-form-{{ key_id }}').requestSubmit()"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">
+      <span class="autosave-hint">auto-saves on change</span>
+    </form>
+
     {# Profile — auto-save on change, with hover descriptions #}
     <label class="control-label">
       <span class="tooltip">Profile<span class="tooltip-content">Controls how Tourniquet behaves when you approach or hit the cap. "standard" blocks requests at 100%; "monitor" only alerts without blocking; "aggressive" starts restricting earlier.</span></span>

@@ -523,6 +523,51 @@ async def update_cap(
     })
 
 
+@router.post("/dashboard/key/{key_id}/ceiling")
+async def update_ceiling(
+    request: Request,
+    key_id: uuid.UUID,
+    absolute_ceiling: float = Form(...),
+) -> HTMLResponse:
+    """Update the per-key absolute ceiling.
+
+    Ceiling is the hard upper bound that auto-tune AND the "lift to ceiling"
+    button respect. We refuse to set it below the current `daily_cap` because
+    that would silently shrink today's enforceable cap to the new ceiling on
+    the next request — surprising and bad. The user must lower daily_cap
+    first if they want a smaller ceiling.
+    """
+    currency = settings.display_currency
+    cents = from_major_units(absolute_ceiling, currency)
+    if cents < 1:
+        raise HTTPException(status_code=422, detail="Ceiling must be at least 1 cent")
+
+    async with get_session() as session:
+        key = await _get_key_or_404(key_id, session)
+        if cents < key.daily_cap_usd_cents:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Ceiling ({format_money(cents, currency)}) must be ≥ daily cap "
+                    f"({format_money(key.daily_cap_usd_cents, currency)}). "
+                    "Lower the daily cap first if you want a smaller ceiling."
+                ),
+            )
+        key.absolute_ceiling_usd_cents = cents
+        await session.commit()
+        today = date.today()
+        summary = await _key_summary(key, today, session)
+
+    return templates.TemplateResponse(request, "_partials/control_panel.html", {
+        "key": summary,
+        "key_id": str(key_id),
+        "profiles": list(PROFILES.keys()),
+        "profiles_obj": PROFILES,
+        "auto_tune_modes": ["off", "suggest", "creep"],
+        "flash": "Ceiling updated.",
+    })
+
+
 @router.post("/dashboard/key/{key_id}/kill")
 async def toggle_kill(request: Request, key_id: uuid.UUID) -> HTMLResponse:
     async with get_session() as session:
