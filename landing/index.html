@@ -414,25 +414,36 @@ tourniquet start</div>
       </div>
     </div>
 
-    <!-- Alternate install options -->
+    <!-- Alternate install options — same install-block component as the
+         macOS/Linux/Windows tabs above, so every snippet on the page has
+         the same visual treatment and a working Copy button. -->
     <div class="install-alts">
 
-      <div class="install-alt">
-        <div class="install-alt-label">Homebrew</div>
-        <p class="soon">Coming soon: <code style="font-family:var(--font-mono);font-size:0.82rem;color:var(--fg-muted)">brew install tourniquet</code></p>
+      <div class="install-block">
+        <div class="install-header">
+          <span class="install-label">Homebrew (coming soon)</span>
+          <button class="copy-btn" data-copy-target="alt-brew">Copy</button>
+        </div>
+        <div class="install-code" id="alt-brew">brew install tourniquet</div>
       </div>
 
-      <div class="install-alt">
-        <div class="install-alt-label">From source</div>
-        <pre>git clone https://github.com/LowryDaniel/tourniquet
+      <div class="install-block">
+        <div class="install-header">
+          <span class="install-label">From source</span>
+          <button class="copy-btn" data-copy-target="alt-source">Copy</button>
+        </div>
+<div class="install-code" id="alt-source">git clone https://github.com/LowryDaniel/tourniquet
 cd tourniquet
 pip install -e ".[dev]"
-tourniquet</pre>
+tourniquet</div>
       </div>
 
-      <div class="install-alt">
-        <div class="install-alt-label">Upgrade</div>
-        <pre>pip install --upgrade tourniquet-dev</pre>
+      <div class="install-block">
+        <div class="install-header">
+          <span class="install-label">Upgrade</span>
+          <button class="copy-btn" data-copy-target="alt-upgrade">Copy</button>
+        </div>
+        <div class="install-code" id="alt-upgrade">pip install --upgrade tourniquet-dev</div>
       </div>
 
     </div>

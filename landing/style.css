@@ -623,13 +623,14 @@ h3 { font-size: 1rem; font-weight: 700; }
 }
 
 .install-block {
-  background: rgba(5,8,17,0.7);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(79, 195, 247, 0.10), rgba(5, 8, 17, 0.70));
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(79, 195, 247, 0.35);
   border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.30), 0 0 24px rgba(79, 195, 247, 0.06);
 }
 
 .install-header {
@@ -637,8 +638,8 @@ h3 { font-size: 1rem; font-weight: 700; }
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  background: rgba(79,195,247,0.04);
-  border-bottom: 1px solid var(--border);
+  background: rgba(79,195,247,0.10);
+  border-bottom: 1px solid rgba(79, 195, 247, 0.25);
 }
 
 .install-label {
@@ -761,42 +762,14 @@ h3 { font-size: 1rem; font-weight: 700; }
   .always-on-hint { grid-template-columns: 1fr; }
 }
 
+/* Container for the alternate-install snippets (Homebrew / From source /
+   Upgrade). Uses install-block components inside, so the boxes match the
+   primary Terminal block visually and all have working Copy buttons. */
 .install-alts {
   display: grid;
   gap: 0.875rem;
 }
-
-.install-alt {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1.125rem 1.25rem;
-}
-
-.install-alt-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-}
-
-.install-alt pre {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  color: var(--fg-muted);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.install-alt .soon {
-  font-size: 0.8rem;
-  color: var(--fg-muted);
-  font-style: italic;
-}
+.install-alts .install-block { margin-bottom: 0; }
 
 /* ── Integrate / code-tabs section ── */
 #integrate .section-desc {
