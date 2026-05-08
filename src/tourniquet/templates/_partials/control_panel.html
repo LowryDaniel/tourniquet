@@ -209,14 +209,17 @@
     </div>
 
     {# Rotate token — destructive, keep explicit confirm #}
-    <label class="control-label">Token</label>
+    <label class="control-label">
+      <span class="tooltip">Token<span class="tooltip-content">The tq_ proxy token your agents use. Only the bcrypt hash is stored — Tourniquet itself can't recover the plaintext, which is why we don't have a "show token" button. If you've lost your copy, click Rotate to generate a fresh one (shown once, with copy-paste blocks for every shell + SDK). The old token stops working immediately, so update anywhere it's deployed.</span></span>
+    </label>
     <form class="control-row"
           action="/dashboard/key/{{ key_id }}/rotate"
           method="post">
       <button type="submit" class="btn-small btn-danger"
-              onclick="return confirm('Rotate token? Old token stops working immediately.')">
+              onclick="return confirm('Rotate token? Old token stops working immediately. Update everywhere it is configured.')">
         Rotate
       </button>
+      <span class="field-cue">Lost your token? Rotate to generate a fresh one — Tourniquet can't recover the original (only the bcrypt hash is stored).</span>
     </form>
 
     {# Delete — destructive, keep explicit confirm #}

@@ -8,7 +8,7 @@
     <dd>Your real Anthropic API key — the secret string from console.anthropic.com that authorises you to use Claude. Tourniquet stores it encrypted; your agents never see it directly.</dd>
 
     <dt>tq_ token</dt>
-    <dd>A proxy token Tourniquet generates for each key. Your agents use this instead of the real sk-ant- key. Tourniquet swaps it for the real key before forwarding to Anthropic, so your actual key never leaves this machine.</dd>
+    <dd>A proxy token Tourniquet generates for each key. Your agents use this instead of the real sk-ant- key. Tourniquet swaps it for the real key before forwarding to Anthropic, so your actual key never leaves this machine. <strong>Shown once on creation/rotation</strong> — Tourniquet stores only the bcrypt hash, so the plaintext can't be recovered. If you lose your copy, use the <strong>Rotate</strong> button in the Control panel to generate a fresh one (the old one stops working immediately).</dd>
 
     <dt>daily_cap</dt>
     <dd>The maximum dollars Tourniquet will let this key spend in one calendar day (midnight UTC to midnight UTC). Once reached, requests are blocked until tomorrow — unless you lift the cap.</dd>
