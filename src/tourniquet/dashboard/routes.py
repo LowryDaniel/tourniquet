@@ -5,9 +5,12 @@ Localhost is the trust boundary; no session/magic-link auth.
 
 from __future__ import annotations
 
+import logging
 import math
 import secrets
 import uuid
+
+log = logging.getLogger(__name__)
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -905,17 +908,17 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
             f'</div>'
         )
     except Exception as exc:
-        # Never leak the admin key in error paths
+        # Never leak the admin key or exception details to the UI.
         try:
             del admin_key
         except (NameError, UnboundLocalError):
             pass
-        msg = str(exc).replace("sk-ant-admin-", "[REDACTED]")[:200]
+        log.warning("intel_fetch failed: %r", exc)
         return HTMLResponse(
-            f'<div class="intel-section intel-error">'
-            f'<p class="warn">⚠ Couldn\'t fetch history: {msg}</p>'
-            f'<p class="muted-hint">Try a different admin key, or pick a different option.</p>'
-            f'</div>',
+            '<div class="intel-section intel-error">'
+            "<p class=\"warn\">⚠ Couldn't fetch usage history. Check that the admin key is valid and "
+            "your machine can reach api.anthropic.com, then try again.</p>"
+            '</div>',
             status_code=500,
         )
 

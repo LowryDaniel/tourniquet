@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tourniquet.billing.caps import get_today_spend
 from tourniquet.config import settings
 from tourniquet.db import get_session
-from tourniquet.models import ApiKey
+from tourniquet.models import ApiKey, ApiKeyAction
 
 router = APIRouter(prefix="/admin")
 
@@ -48,6 +48,34 @@ def _lift_by_amount_signer() -> URLSafeTimedSerializer:
 
 def _lift_mode_signer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(settings.secret_key, salt="lift-mode")
+
+
+def _token_sig(token: str) -> str:
+    """Extract the HMAC tag (last dot-separated segment) from a URLSafeTimedSerializer token.
+
+    This is stable per token and cheap to compare — used as the replay-guard key
+    stored in api_key_actions.details->>'token_sig'.
+    """
+    return token.rsplit(".", 1)[-1]
+
+
+async def _assert_token_unused(
+    session: AsyncSession, key_id: uuid.UUID, action_type: str, token_sig: str
+) -> None:
+    """Raise HTTP 400 if this token signature has already been recorded for this key+action.
+
+    Uses api_key_actions as the consumption ledger — no schema change needed.
+    The token_sig is the HMAC tag extracted from the itsdangerous token, stable per issuance.
+    """
+    result = await session.execute(
+        select(ApiKeyAction).where(
+            ApiKeyAction.api_key_id == key_id,
+            ApiKeyAction.action == action_type,
+            ApiKeyAction.details["token_sig"].as_string() == token_sig,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=400, detail="This link has already been used.")
 
 
 def build_lift_mode_url(key_id: str, mode: str) -> str:
@@ -79,6 +107,7 @@ async def _apply_lift_by_amount(
     key_id: uuid.UUID,
     amount_cents: int,
     source: str = "web",
+    token_sig: str | None = None,
 ) -> tuple[str, int, int]:
     """Add `amount_cents` to today's cap. Clamped to absolute_ceiling.
 
@@ -117,21 +146,24 @@ async def _apply_lift_by_amount(
             f"+{amt_label} bump via {source} — cap now ${new_lifted / 100:.2f} until midnight UTC"
             + (" (ceiling-clamped)" if clamped else "")
         )
+        action_details: dict = {
+            "amount_cents": amount_cents,
+            "lifted_before_cents": lifted_before,
+            "lifted_after_cents": new_lifted,
+            "ceiling_clamped": bool(clamped),
+        }
+        if token_sig is not None:
+            action_details["token_sig"] = token_sig
         await record_action(
             session, key.id, ACTION_LIFT_BY_AMOUNT, source, summary,
-            details={
-                "amount_cents": amount_cents,
-                "lifted_before_cents": lifted_before,
-                "lifted_after_cents": new_lifted,
-                "ceiling_clamped": bool(clamped),
-            },
+            details=action_details,
         )
         await session.commit()
 
         return key.name, new_lifted, int(clamped)
 
 
-async def _apply_kill_now(key_id: uuid.UUID, source: str = "web") -> tuple[str, int]:
+async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str | None = None) -> tuple[str, int]:
     """Emergency stop: block today's requests and preserve the daily_cap baseline.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) to today's spend,
@@ -191,23 +223,26 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web") -> tuple[str, 
                 f"daily_cap preserved at ${key.daily_cap_usd_cents / 100:.2f}"
             )
         )
+        kill_details: dict = {
+            "lifted_before_cents": previous_lifted,
+            "lifted_after_cents": new_lifted,
+            "daily_cap_cents_preserved": key.daily_cap_usd_cents,
+            "today_spend_cents": today_spend,
+            "lift_expires_at": expires_at.isoformat(),
+            "already_floored": already_floored,
+        }
+        if token_sig is not None:
+            kill_details["token_sig"] = token_sig
         await record_action(
             session, key.id, ACTION_KILL_NOW, source, summary,
-            details={
-                "lifted_before_cents": previous_lifted,
-                "lifted_after_cents": new_lifted,
-                "daily_cap_cents_preserved": key.daily_cap_usd_cents,
-                "today_spend_cents": today_spend,
-                "lift_expires_at": expires_at.isoformat(),
-                "already_floored": already_floored,
-            },
+            details=kill_details,
         )
         await session.commit()
 
         return key.name, new_lifted
 
 
-async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web") -> str | None:
+async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_sig: str | None = None) -> str | None:
     """Apply a mode-based cap lift (`2x` / `ceiling` / `ignore`) until midnight UTC.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) with auto-expiry
@@ -260,13 +295,16 @@ async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web") -> str 
         key.lift_expires_at = expires_at
 
         summary = f"Lift {mode} via {source} — cap now ${lifted / 100:.2f} until midnight UTC"
+        lift_mode_details: dict = {
+            "mode": mode,
+            "lifted_before_cents": lifted_before,
+            "lifted_after_cents": lifted,
+        }
+        if token_sig is not None:
+            lift_mode_details["token_sig"] = token_sig
         await record_action(
             session, key.id, ACTION_LIFT_MODE, source, summary,
-            details={
-                "mode": mode,
-                "lifted_before_cents": lifted_before,
-                "lifted_after_cents": lifted,
-            },
+            details=lift_mode_details,
         )
         await session.commit()
         return key.name
@@ -526,7 +564,11 @@ async def kill_now_apply(
     if payload_id != str(key_id):
         raise HTTPException(status_code=400, detail="Token key mismatch.")
 
-    key_name, new_cap = await _apply_kill_now(key_id)
+    sig = _token_sig(token)
+    async with get_session() as session:
+        await _assert_token_unused(session, key_id, "kill_now", sig)
+
+    key_name, new_cap = await _apply_kill_now(key_id, token_sig=sig)
 
     # Fire a recovery alert offering one-click bumps via every configured channel
     try:
@@ -675,11 +717,15 @@ async def lift_mode_apply(
     if payload[0] != str(key_id) or payload[1] != mode or mode not in ("2x", "ceiling"):
         raise HTTPException(status_code=400, detail="Token mismatch.")
 
+    sig = _token_sig(token)
     async with get_session() as session:
+        await _assert_token_unused(session, key_id, "lift_mode", sig)
+
         key = await session.get(ApiKey, key_id)
         if key is None:
             raise HTTPException(status_code=404, detail="Key not found")
 
+        lifted_before = key.lifted_cap_usd_cents
         if mode == "2x":
             new_cap = min(key.daily_cap_usd_cents * 2, key.absolute_ceiling_usd_cents)
         else:
@@ -691,6 +737,16 @@ async def lift_mode_apply(
         key.lifted_cap_usd_cents = new_cap
         key.lift_expires_at = expires_at
         key_name = key.name
+
+        from tourniquet.audit import ACTION_LIFT_MODE, record_action
+        lift_mode_details: dict = {
+            "mode": mode,
+            "lifted_before_cents": lifted_before,
+            "lifted_after_cents": new_cap,
+            "token_sig": sig,
+        }
+        summary = f"Lift {mode} via web — cap now ${new_cap / 100:.2f} until midnight UTC"
+        await record_action(session, key.id, ACTION_LIFT_MODE, "web", summary, details=lift_mode_details)
         await session.commit()
 
     return HTMLResponse(f"""<!doctype html>
@@ -780,7 +836,11 @@ async def lift_by_amount_apply(
     if payload_id != str(key_id) or payload_amount != amount:
         raise HTTPException(status_code=400, detail="Token mismatch.")
 
-    key_name, new_lifted, ceiling_clamped = await _apply_lift_by_amount(key_id, amount)
+    sig = _token_sig(token)
+    async with get_session() as session:
+        await _assert_token_unused(session, key_id, "lift_by_amount", sig)
+
+    key_name, new_lifted, ceiling_clamped = await _apply_lift_by_amount(key_id, amount, token_sig=sig)
 
     note = " (clamped to ceiling)" if ceiling_clamped else ""
     dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"

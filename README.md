@@ -8,7 +8,7 @@ You left an agent running overnight. You woke up to a bill. Tourniquet makes tha
 
 ## Why this exists
 
-Claude Code, ojw-swarm, LangChain loops — unattended agents are great until they aren't. A single runaway tool-call chain or a prompt that spawns sub-agents that spawn sub-agents can hit $50 before you check your phone. The Anthropic Console has spend alerts, but alerts are not caps: the tokens keep flowing after the email lands in your inbox.
+Claude Code, custom agent scripts, LangChain chains — unattended agents are great until they aren't. A single runaway tool-call chain or a prompt that spawns sub-agents that spawn sub-agents can hit $50 before you check your phone. The Anthropic Console has spend alerts, but alerts are not caps: the tokens keep flowing after the email lands in your inbox.
 
 Existing proxies (LiteLLM, Helicone) are built for teams with dashboards, API keys, billing admins, and budgets-per-project. They're overkill if you're one person who just wants to not get burned. Helicone is SaaS-first. LiteLLM's budget enforcement cuts the TCP connection mid-stream, which crashes your agent instead of letting it finish gracefully.
 
@@ -51,7 +51,7 @@ Tourniquet is for the solo dev who runs Claude all day and needs exactly one thi
 **macOS / Linux**
 
 ```bash
-git clone https://github.com/danlowry/tourniquet
+git clone https://github.com/LowryDaniel/tourniquet.git
 cd tourniquet
 pip install -e .
 tourniquet
@@ -60,7 +60,7 @@ tourniquet
 **Windows (PowerShell)**
 
 ```powershell
-git clone https://github.com/danlowry/tourniquet
+git clone https://github.com/LowryDaniel/tourniquet.git
 cd tourniquet
 pip install -e .
 tourniquet

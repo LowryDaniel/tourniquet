@@ -12,14 +12,13 @@ POST /v1/messages:
 from __future__ import annotations
 
 import json
-import secrets
 from datetime import date, datetime, timezone
 
 import bcrypt
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tourniquet.billing.caps import add_spend, get_today_spend, is_over_cap

@@ -6,7 +6,6 @@ Memory hygiene: admin_key is deleted from locals before return.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 

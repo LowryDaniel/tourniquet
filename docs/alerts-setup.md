@@ -316,9 +316,9 @@ ALERT_WEBHOOK_URL=https://hooks.zapier.com/hooks/catch/.../...
 
 ```json
 {
-  "message": "⚠️ Tourniquet: ojw-swarm — at 80%. $4.00/$5.00 today.",
+  "message": "⚠️ Tourniquet: my-agent — at 80%. $4.00/$5.00 today.",
   "event": {
-    "api_key_name": "ojw-swarm",
+    "api_key_name": "my-agent",
     "threshold_pct": 80,
     "spent_usd_cents": 400,
     "cap_usd_cents": 500,

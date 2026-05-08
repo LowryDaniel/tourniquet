@@ -1,12 +1,18 @@
+# DEV ONLY — this compose stack is for local development against Postgres.
+# The hardcoded password and 127.0.0.1 binding are intentional for that use.
+# DO NOT cargo-cult this to production: change the password, drop the published
+# port, and put the web service behind a reverse proxy with auth.
+
 services:
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: tourniquet
-      POSTGRES_PASSWORD: tourniquet
+      POSTGRES_PASSWORD: tourniquet  # dev-only — see banner above
       POSTGRES_DB: tourniquet
     ports:
-      - "5432:5432"
+      # Bound to localhost only so other devices on your LAN can't reach Postgres.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,12 +31,18 @@ services:
       APP_BASE_URL: http://localhost:8000
     env_file: .env
     ports:
-      - "8000:8000"
+      # Bind to localhost only — the dashboard has no auth (the trust boundary
+      # is "you control your own machine"). Exposing to a LAN would let any
+      # device on the network read keys, change caps, or trigger admin lookups.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./src:/app/src
       - ./templates:/app/templates
       - ./static:/app/static
-    command: uvicorn tourniquet.main:app --host 0.0.0.0 --port 8000 --reload
+    # Bind uvicorn to 127.0.0.1 inside the container too. The Docker port
+    # mapping above is the public-facing boundary; this is defence-in-depth
+    # for anyone who runs the container with --network host.
+    command: uvicorn tourniquet.main:app --host 127.0.0.1 --port 8000 --reload
 
 volumes:
   pgdata:

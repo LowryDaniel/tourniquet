@@ -1,6 +1,8 @@
 # Contributing
 
-Tourniquet is pre-launch and not yet accepting external contributors. This file documents the internal development workflow.
+Pull requests are welcome. Tourniquet is small, opinionated, and local-first by design — the bar for "would this fit?" is "does it help a solo dev keep one Anthropic key from running away?". If you're not sure, open an issue first to talk it through.
+
+The rest of this file documents the development workflow.
 
 ## Setup
 

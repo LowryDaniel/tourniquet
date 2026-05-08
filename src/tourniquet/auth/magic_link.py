@@ -12,6 +12,9 @@ Session cookie: itsdangerous SignedCookieSessionInterface via Starlette sessions
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+
 import resend
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tourniquet.config import settings
 from tourniquet.db import get_session
 from tourniquet.models import User
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 router = APIRouter(prefix="/auth")
 
@@ -57,6 +64,12 @@ async def send_magic_link(request: Request, email: str = Form(...)) -> HTMLRespo
     token = _make_token(email)
     link = f"{settings.app_base_url}/auth/verify?token={token}"
 
+    # Store the token hash on the user row so verify can consume it exactly once.
+    async with get_session() as session:
+        user = await _get_or_create_user(email, session)
+        user.magic_link_token = _token_hash(token)
+        await session.commit()
+
     if settings.resend_api_key:
         resend.api_key = settings.resend_api_key
         resend.Emails.send({
@@ -72,9 +85,20 @@ async def send_magic_link(request: Request, email: str = Form(...)) -> HTMLRespo
 @router.get("/verify")
 async def verify_magic_link(request: Request, token: str) -> RedirectResponse:
     email = _verify_token(token)
+    expected_hash = _token_hash(token)
 
     async with get_session() as session:
-        user = await _get_or_create_user(email, session)
+        result = await session.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+        if user is None or user.magic_link_token is None:
+            raise HTTPException(status_code=400, detail="Magic link has already been used or was never issued.")
+
+        if not hmac.compare_digest(user.magic_link_token, expected_hash):
+            raise HTTPException(status_code=400, detail="Magic link has already been used or is invalid.")
+
+        # Consume the token — NULL it out so it can't be replayed.
+        user.magic_link_token = None
         await session.commit()
         user_id = str(user.id)
 

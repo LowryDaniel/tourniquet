@@ -135,12 +135,26 @@ def test_post_kill_now_applies_kill(valid_token_and_key):
 
     killed = {}
 
-    async def _fake_apply_kill_now(kuid):
+    async def _fake_apply_kill_now(kuid, **kwargs):
         killed["id"] = kuid
         killed["done"] = True
         return "my-key", 420
 
-    with patch("tourniquet.routes.admin._apply_kill_now", _fake_apply_kill_now):
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _fake_session():
+        session = AsyncMock()
+        # Replay check: no existing row → scalar_one_or_none returns None (token unused)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
+        session.execute = AsyncMock(return_value=execute_result)
+        yield session
+
+    with (
+        patch("tourniquet.routes.admin._apply_kill_now", _fake_apply_kill_now),
+        patch("tourniquet.routes.admin.get_session", _fake_session),
+    ):
         resp = client.post(
             f"/admin/kill-now/{key_id}",
             data={"token": token},

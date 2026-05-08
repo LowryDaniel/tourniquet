@@ -160,7 +160,6 @@ def cmd_init(args: argparse.Namespace) -> None:
 def cmd_add_key(_args: argparse.Namespace) -> None:
     """Interactive wrapper — delegates to bootstrap_local script logic inline."""
     import asyncio
-    import uuid
 
     import bcrypt
     from cryptography.fernet import Fernet
@@ -263,8 +262,6 @@ def cmd_test(args: argparse.Namespace) -> None:
     Reads tq_ token from --token or $ANTHROPIC_API_KEY. Reads proxy URL from
     --base-url or $ANTHROPIC_BASE_URL or defaults to http://127.0.0.1:8787.
     """
-    import json as _json
-
     import httpx
 
     is_tty = sys.stdout.isatty()
@@ -468,29 +465,29 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
         print()
         if "desktop" in skipped:
             print(f"    {BOLD}desktop{RESET} (Mac/Win/Linux banner notifications)")
-            print(f"      ENABLE_MAC_NOTIFICATIONS=true")
+            print("      ENABLE_MAC_NOTIFICATIONS=true")
             print(f"      MAC_NOTIFICATION_STYLE=both     {DIM}text | action | both{RESET}")
             print()
         if "slack" in skipped:
             print(f"    {BOLD}slack{RESET}")
-            print(f"      SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...")
+            print("      SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...")
             print(f"      {DIM}create at https://api.slack.com/apps → Incoming Webhooks{RESET}")
             print()
         if "telegram" in skipped:
             print(f"    {BOLD}telegram{RESET}")
-            print(f"      TELEGRAM_BOT_TOKEN=123456:ABC...")
-            print(f"      TELEGRAM_CHAT_ID=987654")
+            print("      TELEGRAM_BOT_TOKEN=123456:ABC...")
+            print("      TELEGRAM_CHAT_ID=987654")
             print(f"      {DIM}bot token: chat @BotFather → /newbot{RESET}")
             print(f"      {DIM}chat id:   chat @userinfobot → it replies with your id{RESET}")
             print()
         if "webhook" in skipped:
             print(f"    {BOLD}webhook{RESET} (generic — Zapier/n8n/Home Assistant)")
-            print(f"      ALERT_WEBHOOK_URL=https://hooks.zapier.com/...")
+            print("      ALERT_WEBHOOK_URL=https://hooks.zapier.com/...")
             print()
         if "email" in skipped:
             print(f"    {BOLD}email{RESET} (Resend)")
-            print(f"      RESEND_API_KEY=re_...")
-            print(f"      RESEND_FROM_EMAIL=alerts@yourdomain.com")
+            print("      RESEND_API_KEY=re_...")
+            print("      RESEND_FROM_EMAIL=alerts@yourdomain.com")
             print(f"      {DIM}free tier at resend.com — domain must be verified{RESET}")
             print(f"      {DIM}per-key alert_email also needs setting in the dashboard{RESET}")
             print()
@@ -503,7 +500,7 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
 
 def cmd_lift(args: argparse.Namespace) -> None:
     import asyncio
-    from datetime import date, datetime, timedelta, timezone
+    from datetime import datetime, timedelta, timezone
 
     from sqlalchemy import select
 
