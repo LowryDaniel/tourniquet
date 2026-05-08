@@ -727,6 +727,14 @@ main {
   font-style: normal;
 }
 
+/* One-line visible cue under or beside a field — short signpost of what it does */
+.field-cue {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 0.5rem;
+  opacity: 0.85;
+}
+
 /* ── Onboarding "intel" section ───────────────────────────────────────────── */
 .intel-section {
   margin-top: 2rem;

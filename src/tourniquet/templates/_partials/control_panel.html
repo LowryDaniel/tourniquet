@@ -98,7 +98,7 @@
 
     {# Ceiling — hard upper bound auto-tune and "lift to ceiling" respect #}
     <label class="control-label">
-      <span class="tooltip">Ceiling<span class="tooltip-content">The hard upper limit for this key. Auto-tune and the "🚀 ceiling" lift button can never push the cap above this. Default is set from ABSOLUTE_CEILING_USD_CENTS in your .env (currently ${{ '%.2f'|format(key.absolute_ceiling_usd_cents / 100) }}). Increase this if you want auto-tune room to grow; decrease only after lowering the daily cap first.</span></span>
+      <span class="tooltip">Ceiling — lift max<span class="tooltip-content">The hard upper limit for this key. Auto-tune and the "🚀 to ceiling" lift button can never push the cap above this. Default came from ABSOLUTE_CEILING_USD_CENTS in your .env at key creation. Edit here at any time. Must always be ≥ daily cap — lower the daily cap first if you want to shrink the ceiling.</span></span>
     </label>
     <form class="control-row ceiling-row" id="ceiling-form-{{ key_id }}"
           hx-post="/dashboard/key/{{ key_id }}/ceiling"
@@ -112,7 +112,7 @@
              inputmode="decimal"
              onblur="document.getElementById('ceiling-form-{{ key_id }}').requestSubmit()"
              onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">
-      <span class="autosave-hint">auto-saves on change</span>
+      <span class="field-cue">Hard upper limit. Auto-tune & 🚀 lift can never go above this.</span>
     </form>
 
     {# Profile — auto-save on change, with hover descriptions #}
@@ -189,14 +189,14 @@
             hx-swap="outerHTML">
         <input type="hidden" name="mode" value="multiplier">
         <input type="hidden" name="multiplier" value="2">
-        <button type="submit" class="btn-small">💸 2×</button>
+        <button type="submit" class="btn-small tooltip">💸 2× — ${{ '%.2f'|format(key.daily_cap_usd_cents * 2 / 100) }}<span class="tooltip-content">Doubles today's cap. Resets at midnight UTC. Capped at the ceiling above.</span></button>
       </form>
       <form style="display:inline"
             hx-post="/dashboard/key/{{ key_id }}/lift"
             hx-target="#control-panel"
             hx-swap="outerHTML">
         <input type="hidden" name="mode" value="ceiling">
-        <button type="submit" class="btn-small">🚀 <span class="tooltip">ceiling<span class="tooltip-content">Raises the cap all the way to the maximum you've set for this key. Still resets at midnight UTC.</span></span></button>
+        <button type="submit" class="btn-small tooltip">🚀 to ceiling — ${{ '%.2f'|format(key.absolute_ceiling_usd_cents / 100) }}<span class="tooltip-content">Raises today's cap to the absolute ceiling shown above. Still resets at midnight UTC. To go higher, raise the Ceiling first.</span></button>
       </form>
       {% if key.lift_active %}
       <form style="display:inline"
