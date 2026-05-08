@@ -501,16 +501,35 @@ h3 { font-size: 1rem; font-weight: 700; }
 
 .step p { color: var(--fg-muted); font-size: 0.925rem; }
 
-.step code {
+/* Inline <code> inside step body paragraphs — small chip, matches FAQ inline code. */
+.step p code {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 0.85em;
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.05em 0.4em;
   color: var(--accent);
-  margin-top: 0.5rem;
+}
+
+/* Block-level command shown after a step's body — matches the .install-code
+   treatment in the Install section so the same shell command never appears
+   in two visually-different ways on the same page. */
+.step-cmd {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: rgba(5, 8, 17, 0.7);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1.1rem;
+  margin-top: 0.75rem;
+  color: var(--accent);
+  white-space: pre;
+  overflow-x: auto;
 }
 
 /* ── Dashboard section ── */
