@@ -1,13 +1,15 @@
-/* install.js — OS detection and copy-to-clipboard for install block */
+/* install.js — OS detection, copy-to-clipboard, and integrate tabs */
 (function () {
   "use strict";
 
   var COMMANDS = {
-    mac:     "pip install tourniquet && tourniquet",
-    linux:   "pip install tourniquet && tourniquet",
-    windows: "pip install tourniquet; tourniquet",
+    mac:     "pip install tourniquet-dev && tourniquet",
+    linux:   "pip install tourniquet-dev && tourniquet",
+    windows: "pip install tourniquet-dev; tourniquet",
     mobile:  null
   };
+
+  /* ── OS tabs ─────────────────────────────────────────────────────────── */
 
   function detectOS() {
     var ua = navigator.userAgent || "";
@@ -16,12 +18,13 @@
     if (/win/i.test(pl)) return "windows";
     if (/mac/i.test(pl)) return "mac";
     if (/linux/i.test(pl)) return "linux";
-    return "linux"; // sensible default
+    return "linux";
   }
 
   function setActiveTab(os) {
     document.querySelectorAll(".tab-btn").forEach(function (btn) {
       btn.classList.toggle("active", btn.dataset.os === os);
+      btn.setAttribute("aria-selected", btn.dataset.os === os ? "true" : "false");
     });
     document.querySelectorAll(".os-panel").forEach(function (panel) {
       panel.hidden = panel.dataset.os !== os;
@@ -37,42 +40,42 @@
     if (mainCode) mainCode.hidden = true;
   }
 
-  function init() {
-    var os = detectOS();
+  /* ── Integrate (agent) tabs ───────────────────────────────────────────── */
 
-    // Mark body with OS for any CSS hooks
-    document.documentElement.dataset.os = os;
-
-    setActiveTab(os);
-
-    if (os === "mobile") showMobile();
-
-    // Tab switching
-    document.querySelectorAll(".tab-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        setActiveTab(btn.dataset.os);
-      });
+  function setActiveIntegrateTab(tool) {
+    document.querySelectorAll(".integrate-tab-btn").forEach(function (btn) {
+      btn.classList.toggle("active", btn.dataset.tool === tool);
+      btn.setAttribute("aria-selected", btn.dataset.tool === tool ? "true" : "false");
     });
+    document.querySelectorAll(".integrate-snippet").forEach(function (pane) {
+      pane.hidden = pane.dataset.tool !== tool;
+    });
+  }
 
-    // Copy buttons
-    document.querySelectorAll(".copy-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var targetId = btn.dataset.copyTarget;
-        var codeEl = document.getElementById(targetId);
-        if (!codeEl) return;
-        var text = (codeEl.textContent || codeEl.innerText || "").trim();
-        if (!text) return;
+  /* ── Copy button ──────────────────────────────────────────────────────── */
 
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () {
-            flashCopied(btn);
-          }).catch(function () {
-            fallbackCopy(text, btn);
-          });
-        } else {
+  function bindCopyButton(btn) {
+    btn.addEventListener("click", function () {
+      var targetId = btn.dataset.copyTarget;
+      var codeEl = targetId ? document.getElementById(targetId) : btn.closest(".integrate-panel, .install-block");
+      if (!codeEl) return;
+
+      /* For integrate panels, find the <pre> inside */
+      var preEl = codeEl.tagName === "PRE" ? codeEl : codeEl.querySelector("pre");
+      var text = preEl
+        ? (preEl.textContent || preEl.innerText || "").trim()
+        : (codeEl.textContent || codeEl.innerText || "").trim();
+      if (!text) return;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          flashCopied(btn);
+        }).catch(function () {
           fallbackCopy(text, btn);
-        }
-      });
+        });
+      } else {
+        fallbackCopy(text, btn);
+      }
     });
   }
 
@@ -95,6 +98,49 @@
       btn.textContent = orig;
       btn.classList.remove("copied");
     }, 2000);
+  }
+
+  /* ── Reduced-motion: disable video autoplay ───────────────────────────── */
+
+  function respectReducedMotion() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.querySelectorAll("video[autoplay]").forEach(function (v) {
+        v.removeAttribute("autoplay");
+        v.pause();
+      });
+    }
+  }
+
+  /* ── Init ─────────────────────────────────────────────────────────────── */
+
+  function init() {
+    var os = detectOS();
+    document.documentElement.dataset.os = os;
+    setActiveTab(os);
+    if (os === "mobile") showMobile();
+
+    /* OS tab switching */
+    document.querySelectorAll(".tab-btn[data-os]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        setActiveTab(btn.dataset.os);
+      });
+    });
+
+    /* Integrate tab switching — default to "claude-code" */
+    var integrateTabs = document.querySelectorAll(".integrate-tab-btn[data-tool]");
+    if (integrateTabs.length) {
+      setActiveIntegrateTab("claude-code");
+      integrateTabs.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          setActiveIntegrateTab(btn.dataset.tool);
+        });
+      });
+    }
+
+    /* Bind all copy buttons */
+    document.querySelectorAll(".copy-btn").forEach(bindCopyButton);
+
+    respectReducedMotion();
   }
 
   if (document.readyState === "loading") {

@@ -7,7 +7,7 @@
   <title>Tourniquet — Stop runaway Claude API spend</title>
   <meta name="description" content="A free, local-first proxy that hard-caps your Anthropic API at a daily limit you set. When the cap hits, it kills the stream — your agent stops, your bill doesn't grow.">
   <link rel="canonical" href="https://tourniquet.dev/">
-  <meta name="theme-color" content="#0d0d0d">
+  <meta name="theme-color" content="#080c17">
 
   <!-- Open Graph / Twitter -->
   <meta property="og:type" content="website">
@@ -33,9 +33,20 @@
     <span class="nav-logo">tourniquet<span>.</span>dev</span>
     <ul class="nav-links">
       <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
       <li><a href="#install">Install</a></li>
+      <li><a href="#integrate">Integrate</a></li>
+      <li><a href="#compare">Compare</a></li>
       <li><a href="#trust">Trust</a></li>
-      <li><a href="https://github.com/LowryDaniel/tourniquet">GitHub</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li>
+        <a href="https://github.com/LowryDaniel/tourniquet" target="_blank" rel="noopener noreferrer">
+          GitHub
+          <span class="nav-stars">
+            <img src="https://img.shields.io/github/stars/LowryDaniel/tourniquet?style=flat&color=4fc3f7" alt="GitHub stars" loading="lazy" decoding="async">
+          </span>
+        </a>
+      </li>
     </ul>
   </div>
 </nav>
@@ -56,23 +67,26 @@
         </svg>
         Install
       </a>
-      <a href="https://github.com/LowryDaniel/tourniquet" class="btn-ghost" target="_blank" rel="noopener">
+      <a href="https://github.com/LowryDaniel/tourniquet" class="btn-ghost" target="_blank" rel="noopener noreferrer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.185 6.839 9.504.5.092.682-.217.682-.482 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.025 10.025 0 0022 12.021C22 6.484 17.522 2 12 2z"/>
         </svg>
         View on GitHub
+        <img src="https://img.shields.io/github/stars/LowryDaniel/tourniquet?style=flat&color=4fc3f7" alt="GitHub stars" loading="lazy" decoding="async" style="height:18px;border-radius:3px;margin-left:0.25rem;vertical-align:middle;">
       </a>
     </div>
 
-    <!-- Terminal demo -->
-    <div class="terminal-wrap" role="img" aria-label="Terminal showing a streaming Claude response being cut off when the daily cap is reached">
-      <div class="terminal-bar">
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <span class="terminal-title">tourniquet — proxy running on :8787</span>
-      </div>
-      <div class="terminal-body">
+    <!-- Hero media: terminal + dashboard screenshot -->
+    <div class="hero-media">
+      <!-- Terminal mockup -->
+      <div class="terminal-wrap" role="img" aria-label="Terminal showing a streaming Claude response being cut off when the daily cap is reached">
+        <div class="terminal-bar">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <span class="terminal-title">tourniquet — proxy running on :8787</span>
+        </div>
+        <div class="terminal-body">
 <span class="t-prompt">$ </span><span class="t-cmd">claude "refactor everything in /src for performance"</span>
 <span class="t-stream">Streaming response via Tourniquet proxy...</span>
 
@@ -87,45 +101,114 @@
 <span class="t-comment">   event: message_stop</span>
 <span class="t-comment">   data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}</span>
 <span class="cursor"></span></div>
+      </div>
+
+      <!-- Dashboard preview — replace dashboard-mock.svg with a real screenshot
+           (1200×750 PNG) when one's available; the SVG lives at the same path
+           as a fallback that still looks intentional. -->
+      <div class="hero-screenshot-wrap">
+        <div class="hero-screenshot">
+          <picture>
+            <source srcset="dashboard-screenshot.png" type="image/png">
+            <img
+              src="dashboard-mock.svg"
+              alt="Tourniquet dashboard — live spend bar at $8.43 of $15 cap, action history showing Slack-tap bumps and proxy-fired alerts, 14-day spend chart"
+              width="1200"
+              height="750"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+        </div>
+        <p class="hero-media-caption">Tourniquet dashboard — live spend, alert history, in-app one-tap recovery</p>
+      </div>
+    </div>
+
+    <!-- Install demo video (hidden gracefully when file absent) -->
+    <div class="hero-video-wrap">
+      <details>
+        <summary style="display:none" aria-hidden="true">Install demo video</summary>
+        <div class="hero-video-inner">
+          <video
+            autoplay
+            muted
+            loop
+            playsinline
+            poster="install-demo-poster.jpg"
+            width="640"
+            aria-label="Tourniquet install demo video"
+          >
+            <source src="install-demo.mp4" type="video/mp4">
+          </video>
+          <p class="hero-video-caption">Install in 60 seconds</p>
+        </div>
+      </details>
     </div>
   </div>
 </section>
 
-<!-- ── Pain ── -->
+<!-- ── Pain — verified incident cards ── -->
 <section id="pain" aria-labelledby="pain-heading">
   <div class="container">
     <div class="section-label">Why this exists</div>
-    <h2 id="pain-heading">You've seen this story before</h2>
+    <h2 id="pain-heading">This has already cost people real money</h2>
     <div class="pain-grid">
 
-      <div class="pain-card highlight">
-        <p>
-          <strong>You set up an agent. It loops. You wake up to a $400 bill.</strong>
-          It's not hypothetical — documented incidents include a single LangChain agent
-          accumulating over $40,000 in a single run, and Cursor users hitting unexpected
-          charges after leaving overnight tasks unattended. The common thread: no hard stop.
-        </p>
-      </div>
+      <!-- Card 1: Replit -->
+      <article class="incident-card">
+        <div class="incident-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4fc3f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+            <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+          </svg>
+        </div>
+        <h3 class="incident-headline">Replit AI wiped 1,200+ company records during a code freeze.</h3>
+        <p class="incident-body">An AI coding agent ran unauthorized commands during a designated freeze and deleted a production database holding records of 1,206 executives and 1,196 companies, then fabricated 4,000 fake users to cover the bug. The agent later admitted: "This was a catastrophic failure on my part."</p>
+        <div class="incident-source">
+          <time datetime="2025-07">July 2025</time> —
+          <a href="https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/" target="_blank" rel="noopener noreferrer">
+            Fortune<span class="ext-link-glyph" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </article>
 
-      <div class="pain-card">
-        <p>
-          Token spend can compound faster than intuition suggests. An agentic loop with tool
-          calls, retries, and long context windows can burn through a daily budget in under
-          ten minutes if something goes sideways. The Anthropic Console offers monthly soft
-          limits; they don't stop an in-flight request.
-        </p>
-      </div>
+      <!-- Card 2: Cursor -->
+      <article class="incident-card">
+        <div class="incident-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            <polyline points="17 6 23 6 23 12"/>
+          </svg>
+        </div>
+        <h3 class="incident-headline">Cursor users hit $7,000/day after a pricing change.</h3>
+        <p class="incident-body">Following Cursor's June 2025 pricing model change, multiple developers reported single-day surprise charges over $7,000 from unattended overnight agents. Cursor refunded affected users and acknowledged communication failures. Background-running agents consume credits faster than dashboards can poll.</p>
+        <div class="incident-source">
+          <time datetime="2025-06">June 2025</time> —
+          <a href="https://www.vantage.sh/blog/cursor-pricing-explained" target="_blank" rel="noopener noreferrer">
+            Vantage<span class="ext-link-glyph" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </article>
 
-      <div class="pain-card">
-        <p>
-          <strong>Existing options all have the same gap.</strong> Anthropic's own spend limits
-          are monthly and advisory. LiteLLM is team-grade infrastructure with a meaningful
-          ops surface. Helicone and similar SaaS proxies route your traffic through someone
-          else's cloud — and none of them inject a clean stop mid-stream. They drop the TCP
-          connection, which your agent sees as a generic network error, not a recoverable
-          budget signal.
-        </p>
-      </div>
+      <!-- Card 3: $47k composite -->
+      <article class="incident-card">
+        <div class="incident-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffa726" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            <path d="M8 12h8"/>
+            <path d="M12 8v8"/>
+          </svg>
+        </div>
+        <h3 class="incident-headline">Four agents stuck in a loop for 11 days · $47,283.</h3>
+        <p class="incident-body">A reconstructed postmortem describes a four-node LangChain pipeline (Analyzer &rarr; Synthesizer &rarr; Critic &rarr; Writer) where a malformed URL caused a parser failure that fed the loop. By day 11 the OpenAI dashboard read $47,283. The team had observability — they did not have budget enforcement.</p>
+        <div class="incident-source">
+          <time datetime="2026">2026</time> —
+          <a href="https://dev.to/waxell/the-47000-agent-loop-why-token-budget-alerts-arent-budget-enforcement-389i" target="_blank" rel="noopener noreferrer">
+            DEV Community (reconstructed composite)<span class="ext-link-glyph" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </article>
 
     </div>
   </div>
@@ -151,10 +234,7 @@
         <div class="step-icon" aria-hidden="true">2️⃣</div>
         <div>
           <h3>Run it</h3>
-          <p>
-            A single command starts the proxy and opens your browser at the local dashboard.
-            No config files to edit, no environment to learn.
-          </p>
+          <p>A single command starts the proxy and opens your browser at the local dashboard. No config files to edit, no environment to learn.</p>
           <code>tourniquet</code>
         </div>
       </div>
@@ -163,13 +243,70 @@
         <div class="step-icon" aria-hidden="true">3️⃣</div>
         <div>
           <h3>Paste your key, set a cap</h3>
-          <p>
-            Enter your <code>sk-ant-</code> key in the dashboard, choose a daily dollar limit,
-            and point your agent at <code>http://localhost:8787</code>.
-            Done. Your key never leaves your machine.
-          </p>
+          <p>Enter your <code>sk-ant-</code> key in the dashboard, choose a daily dollar limit, and point your agent at <code>http://localhost:8787</code>. Done. Your key never leaves your machine.</p>
         </div>
       </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Dashboard ── -->
+<section id="dashboard" aria-labelledby="dashboard-heading">
+  <div class="container">
+    <div class="section-label">Live control</div>
+    <h2 id="dashboard-heading">Everything happens in the dashboard</h2>
+    <p class="section-lede">Once Tourniquet is running, your browser opens at <code>http://localhost:8787/dashboard</code>. Every cap, every kill, every recovery — all from one screen. No config files to edit, no commands to memorise.</p>
+
+    <div class="dashboard-grid">
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Live spend bar</h3>
+        <p>See exactly what each key has spent today. Bar climbs in real time as requests stream through — polls every 5 seconds, no refresh needed.</p>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        </div>
+        <h3>One-click lift &amp; kill</h3>
+        <p>Two buttons cover 99% of cap drama: <strong>2×</strong> doubles today's cap, <strong>To ceiling</strong> raises it to the maximum you set. Kill stops the key instantly, with a "+$N to continue?" recovery prompt.</p>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><polyline points="12 7 12 12 15 14"/></svg>
+        </div>
+        <h3>Action history</h3>
+        <p>Every kill, lift, bump, and alert lands in an audit log — with the channel that triggered it tagged ("Slack tap", "Telegram", "web", "CLI"). Proof of every action even when the cap value didn't visibly change.</p>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h3>Setup checklist</h3>
+        <p>Slack, Telegram, email, generic webhook, desktop banners — each row turns green when configured. Click "Set up X" and the dashboard expands a copy-paste walkthrough you finish in a couple of minutes.</p>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <h3>Auto-tune (optional)</h3>
+        <p>Tourniquet looks at your last 14 days of usage and suggests a cap that fits. Pick "suggest" to see recommendations, "creep" to apply them automatically up to a hard ceiling you control. "off" means it never touches your cap on its own.</p>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>In-app one-tap recovery</h3>
+        <p>When a key hits its cap, your phone gets a Slack or Telegram alert with <strong>+$1 / +$5 / +$10</strong> buttons. Tap one — the message rewrites in place to "✓ Bumped — cap is now $X". No browser, no public URL, works from anywhere with cell signal.</p>
+      </article>
 
     </div>
   </div>
@@ -250,6 +387,170 @@ tourniquet</pre>
   </div>
 </section>
 
+<!-- ── Integrate / code-tabs ── -->
+<section id="integrate" aria-labelledby="integrate-heading">
+  <div class="container">
+    <div class="section-label">Integrate</div>
+    <h2 id="integrate-heading">Point your agent at it</h2>
+    <p class="section-desc">Swap two env vars. Your agent code, SDKs, and prompts don't change.</p>
+
+    <div class="integrate-tabs" role="tablist" aria-label="Agent tool">
+      <button class="integrate-tab-btn active" role="tab" data-tool="claude-code"  aria-selected="true">Claude Code</button>
+      <button class="integrate-tab-btn"        role="tab" data-tool="cursor"       aria-selected="false">Cursor</button>
+      <button class="integrate-tab-btn"        role="tab" data-tool="python"       aria-selected="false">Python</button>
+      <button class="integrate-tab-btn"        role="tab" data-tool="node"         aria-selected="false">Node</button>
+      <button class="integrate-tab-btn"        role="tab" data-tool="curl"         aria-selected="false">curl</button>
+    </div>
+
+    <!-- Claude Code -->
+    <div class="integrate-panel integrate-snippet" data-tool="claude-code">
+      <div class="integrate-header">
+        <span class="integrate-lang">bash / zsh</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <div class="integrate-code-wrap">
+        <pre id="snip-claude-code">export ANTHROPIC_BASE_URL=http://localhost:8787
+export ANTHROPIC_API_KEY=tq_YOUR_TOKEN
+claude</pre>
+      </div>
+    </div>
+
+    <!-- Cursor -->
+    <div class="integrate-panel integrate-snippet" data-tool="cursor" hidden>
+      <div class="integrate-header">
+        <span class="integrate-lang">env var</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <div class="integrate-code-wrap">
+        <pre id="snip-cursor">ANTHROPIC_BASE_URL=http://localhost:8787
+ANTHROPIC_API_KEY=tq_YOUR_TOKEN</pre>
+      </div>
+    </div>
+
+    <!-- Python SDK -->
+    <div class="integrate-panel integrate-snippet" data-tool="python" hidden>
+      <div class="integrate-header">
+        <span class="integrate-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <div class="integrate-code-wrap">
+        <pre id="snip-python">import anthropic
+
+client = anthropic.Anthropic(
+    api_key="tq_YOUR_TOKEN",
+    base_url="http://localhost:8787",
+)
+
+resp = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=100,
+    messages=[{"role": "user", "content": "hi"}],
+)
+print(resp.content[0].text)</pre>
+      </div>
+    </div>
+
+    <!-- Node SDK -->
+    <div class="integrate-panel integrate-snippet" data-tool="node" hidden>
+      <div class="integrate-header">
+        <span class="integrate-lang">typescript / node</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <div class="integrate-code-wrap">
+        <pre id="snip-node">import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  apiKey: "tq_YOUR_TOKEN",
+  baseURL: "http://localhost:8787",
+});
+
+const resp = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 100,
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(resp.content[0].text);</pre>
+      </div>
+    </div>
+
+    <!-- curl -->
+    <div class="integrate-panel integrate-snippet" data-tool="curl" hidden>
+      <div class="integrate-header">
+        <span class="integrate-lang">curl</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <div class="integrate-code-wrap">
+        <pre id="snip-curl">curl -s -N -X POST http://localhost:8787/v1/messages \
+  -H "authorization: Bearer tq_YOUR_TOKEN" \
+  -H "content-type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":50,"messages":[{"role":"user","content":"say hi in 5 words"}]}'</pre>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Comparison table ── -->
+<section id="compare" aria-labelledby="compare-heading">
+  <div class="container">
+    <div class="section-label">Comparison</div>
+    <h2 id="compare-heading">How Tourniquet compares</h2>
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Criteria</th>
+            <th scope="col" class="col-tourniquet">Tourniquet</th>
+            <th scope="col">Anthropic Console</th>
+            <th scope="col">LiteLLM</th>
+            <th scope="col">Helicone</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Hard mid-stream stop at the cap</td>
+            <td class="cell-yes">✅ injected SSE message_stop</td>
+            <td class="cell-no">❌ monthly soft limit only</td>
+            <td class="cell-warn">⚠️ TCP drop</td>
+            <td class="cell-warn">⚠️ TCP drop</td>
+          </tr>
+          <tr>
+            <td>Local-only / no cloud</td>
+            <td class="cell-yes">✅ 100% local, SQLite</td>
+            <td class="cell-no">❌ Anthropic SaaS</td>
+            <td class="cell-no">❌ requires Postgres + ops</td>
+            <td class="cell-no">❌ SaaS proxy</td>
+          </tr>
+          <tr>
+            <td>Free</td>
+            <td class="cell-yes">✅ MIT licensed</td>
+            <td class="cell-yes">✅ at low usage</td>
+            <td class="cell-warn">⚠️ self-host overhead</td>
+            <td class="cell-warn">⚠️ tiered SaaS pricing</td>
+          </tr>
+          <tr>
+            <td>In-app one-tap recovery from phone</td>
+            <td class="cell-yes">✅ Slack + Telegram</td>
+            <td class="cell-no">❌ none</td>
+            <td class="cell-no">❌ none</td>
+            <td class="cell-no">❌ none</td>
+          </tr>
+          <tr>
+            <td>Setup time</td>
+            <td class="cell-yes">~60 seconds</td>
+            <td>n/a — already on</td>
+            <td class="cell-warn">~hours (Postgres, configs, scopes)</td>
+            <td class="cell-warn">~minutes (signup, key swap)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="compare-footnote">Comparison reflects the public state of each product as of May 2026. Corrections welcome via <a href="https://github.com/LowryDaniel/tourniquet/issues" target="_blank" rel="noopener noreferrer">GitHub issue</a>.</p>
+  </div>
+</section>
+
 <!-- ── Trust ── -->
 <section id="trust" aria-labelledby="trust-heading">
   <div class="container">
@@ -273,7 +574,7 @@ tourniquet</pre>
   <div class="container">
     <div class="section-label">Technical detail</div>
     <h2 id="kill-heading">The cleanest stop in the category</h2>
-    <p style="color:var(--fg-muted);margin-bottom:1.25rem;">
+    <p class="body-muted">
       When your daily cap is reached mid-stream, Tourniquet doesn't drop the TCP connection.
       It injects a synthetic SSE <code>message_stop</code> event at the end of the current
       partial chunk, then cleanly closes the response:
@@ -284,7 +585,7 @@ tourniquet</pre>
 <span class="sse-event">data: </span><span class="t-comment">{</span><span class="sse-key">"type"</span><span class="t-comment">:</span><span class="sse-val">"message_stop"</span><span class="t-comment">,</span><span class="sse-key">"stop_reason"</span><span class="t-comment">:</span><span class="sse-stop">"tourniquet_cap_hit"</span><span class="t-comment">}</span>
     </div>
 
-    <p style="color:var(--fg-muted);margin-bottom:1.5rem;">
+    <p class="body-muted">
       This matters because the <code>stop_reason</code> field is surfaced to your agent code.
       A well-written agent can catch <code>tourniquet_cap_hit</code>, log the event, and exit
       gracefully — rather than crashing with an unhandled network exception.
@@ -299,6 +600,74 @@ tourniquet</pre>
         <h4>Tourniquet approach</h4>
         <p>Inject a clean <code>message_stop</code> SSE event with a machine-readable <code>stop_reason</code>. The SDK calls your normal completion callback. You can handle it.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section id="faq" aria-labelledby="faq-heading">
+  <div class="container">
+    <div class="section-label">Questions</div>
+    <h2 id="faq-heading">Common questions</h2>
+
+    <div class="faq-list">
+
+      <details>
+        <summary>Will my existing agent break?</summary>
+        <div class="faq-answer">
+          No. Tourniquet speaks the same Anthropic Messages API. You swap the base URL and the API key — your agent code, SDKs, and prompts don't change. When the cap hits, the SDK sees a normal <code>message_stop</code> with <code>stop_reason: tourniquet_cap_hit</code> instead of a network exception.
+        </div>
+      </details>
+
+      <details>
+        <summary>Does it work with Cursor / Claude Code / Cline / Aider?</summary>
+        <div class="faq-answer">
+          Yes — anything that respects <code>ANTHROPIC_BASE_URL</code> and <code>ANTHROPIC_API_KEY</code> env vars. Set both, point at <code>http://localhost:8787</code>, and Tourniquet handles the rest. The "Point your agent at it" section above has copy-paste snippets for the common tools.
+        </div>
+      </details>
+
+      <details>
+        <summary>What happens if my laptop sleeps?</summary>
+        <div class="faq-answer">
+          The proxy idles. Outbound long-poll connections (Telegram, Slack Socket Mode) drop, queue up at the provider, and reconnect when the laptop wakes. In-flight requests fail gracefully. If you need 24/7 enforcement, run Tourniquet on a Raspberry Pi or a small cloud VM — same package, same <code>tourniquet start</code> command.
+        </div>
+      </details>
+
+      <details>
+        <summary>Why not just use Anthropic's monthly limit?</summary>
+        <div class="faq-answer">
+          It's monthly, advisory, and applied at the account level after-the-fact. It won't stop a single agent burning $400 in 20 minutes — by the time the dashboard updates, the bill is already there. Tourniquet enforces in-flight, per-key, with a hard mid-stream stop.
+        </div>
+      </details>
+
+      <details>
+        <summary>Is my Anthropic key safe?</summary>
+        <div class="faq-answer">
+          It's stored encrypted at rest with Fernet (AES-256-CBC + HMAC-SHA256). Plaintext lives only in process memory while a request is being forwarded. The encryption key is generated locally on first run and never leaves your machine. Tourniquet makes outbound requests to one place: <code>api.anthropic.com</code>.
+        </div>
+      </details>
+
+      <details>
+        <summary>What gets sent to Slack / Telegram / email?</summary>
+        <div class="faq-answer">
+          Only the alert text — the key name, the threshold percentage, and the current spend. Never the prompt, never the response, never your Anthropic key. The <code>/trust</code> page on the local dashboard lists exactly which fields each channel sees.
+        </div>
+      </details>
+
+      <details>
+        <summary>Can I run this with multiple keys / users?</summary>
+        <div class="faq-answer">
+          Yes. Tourniquet is single-user but multi-key by design — one Anthropic key per project, each with its own daily cap, its own alerts, its own audit log. The local SQLite DB scales fine to dozens of keys.
+        </div>
+      </details>
+
+      <details>
+        <summary>Is this open source? Can I contribute?</summary>
+        <div class="faq-answer">
+          MIT licensed. Code at <a href="https://github.com/LowryDaniel/tourniquet" target="_blank" rel="noopener noreferrer">github.com/LowryDaniel/tourniquet</a>. Issues, PRs, and feature requests all welcome — see <a href="https://github.com/LowryDaniel/tourniquet/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>.
+        </div>
+      </details>
+
     </div>
   </div>
 </section>
