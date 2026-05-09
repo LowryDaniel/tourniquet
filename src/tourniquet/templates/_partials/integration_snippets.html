@@ -2,7 +2,7 @@
    that key_rotated.html shows once on key creation. The token itself can't
    be recovered (only the bcrypt hash is stored), so snippets use the
    placeholder `tq_YOUR_TOKEN` and a hint to Rotate if the user lost theirs. #}
-{% set proxy_url = "http://" + (request.url.netloc if request else "127.0.0.1:8787") %}
+{% set proxy_url = (request.url.scheme if request else "http") + "://" + (request.url.netloc if request else "127.0.0.1:8787") %}
 
 <div class="glass-panel integration-snippets-panel" id="integration-snippets-{{ key_id }}">
   <details>
