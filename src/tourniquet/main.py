@@ -22,15 +22,15 @@ _ASSETS_DIR = Path(__file__).parent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    if settings.sentry_dsn:
+        sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
+
     # Auto-create schema on first run — users don't need a separate migration step.
     # Idempotent: re-run is a no-op if tables already exist.
     from tourniquet.db import engine
     from tourniquet.models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    if settings.sentry_dsn:
-        sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.app_env)
 
     # Auto-start Telegram polling so inline buttons work in-app without a webhook
     from tourniquet.alerts.telegram_poller import poller as telegram_poller

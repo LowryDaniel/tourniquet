@@ -95,7 +95,10 @@ async def verify_magic_link(request: Request, token: str) -> RedirectResponse:
             raise HTTPException(status_code=400, detail="Magic link has already been used or was never issued.")
 
         if not hmac.compare_digest(user.magic_link_token, expected_hash):
-            raise HTTPException(status_code=400, detail="Magic link has already been used or is invalid.")
+            raise HTTPException(
+                status_code=400,
+                detail="This sign-in link is no longer valid. If you requested a new link, use the most recent email.",
+            )
 
         # Consume the token — NULL it out so it can't be replayed.
         user.magic_link_token = None
