@@ -53,3 +53,4 @@ Thumbs.db
 PyPI-Recovery-Codes-*.txt
 *-recovery-codes*.txt
 .pypirc
+.worktrees/
