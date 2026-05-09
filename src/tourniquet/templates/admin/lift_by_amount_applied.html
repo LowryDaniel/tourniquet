@@ -1,0 +1,9 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Bumped — Tourniquet{% endblock %}
+{% block content %}
+<h1 class="success">✓ Cap bumped.</h1>
+<p><strong>{{ key_name }}</strong> can now spend up to
+   <strong>${{ "%.2f"|format(new_lifted / 100) }}</strong> today{{ note }}.</p>
+<p>The lift expires at midnight UTC. After that, the original daily cap returns.</p>
+<a href="{{ dashboard_url }}" class="btn-link">Open dashboard →</a>
+{% endblock %}

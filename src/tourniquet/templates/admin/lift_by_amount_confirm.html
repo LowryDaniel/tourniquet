@@ -1,0 +1,16 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Bump cap — Tourniquet{% endblock %}
+{% block content %}
+<h1>Bump <em>{{ key_name }}</em> by ${{ "%.2f"|format(amount / 100) }}?</h1>
+<div class="info">
+  Current cap: <strong>${{ "%.2f"|format(current_cap / 100) }}</strong> →
+  After bump: <strong>${{ "%.2f"|format((current_cap + amount) / 100) }}</strong><br>
+  Lift auto-expires at midnight UTC (24h max).
+</div>
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="amount" value="{{ amount }}">
+  <button type="submit" class="btn">Confirm bump</button>
+  <a href="{{ dashboard_url }}" class="cancel">Cancel</a>
+</form>
+{% endblock %}

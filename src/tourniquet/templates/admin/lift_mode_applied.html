@@ -1,0 +1,8 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Lifted — Tourniquet{% endblock %}
+{% block content %}
+<h1 class="success">✓ Lifted.</h1>
+<p><strong>{{ key_name }}</strong> daily cap raised to <strong>${{ "%.2f"|format(new_cap / 100) }}</strong>
+   until midnight UTC.</p>
+<a href="{{ dashboard_url }}" class="btn-link">Open dashboard →</a>
+{% endblock %}
