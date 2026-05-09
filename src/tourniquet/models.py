@@ -81,6 +81,13 @@ class ApiKey(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     tq_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # SHA-256 hex of the raw tq_* token. Indexed unique so the proxy auth
+    # path can do a single lookup instead of a bcrypt linear scan. Nullable
+    # to support legacy rows created before C3; backfilled on first match
+    # via the bcrypt fallback path.
+    tq_token_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True,
+    )
     anthropic_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[str] = mapped_column(String(50), nullable=False, default="standard")
     daily_cap_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
