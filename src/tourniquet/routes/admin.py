@@ -15,6 +15,7 @@ salts ("kill-now", "lift-by-amount") and 24h expiry.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -341,14 +342,20 @@ class UnliftResponse(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def _resolve_and_auth(token: str, key_identifier: str, session: AsyncSession) -> ApiKey:
-    """Resolve token to ApiKey and verify it matches the requested key_identifier."""
+    """Resolve token to ApiKey and verify it matches the requested key_identifier.
+
+    Loads all keys to do the identifier match (UUID prefix or exact name); the
+    token verification then prefers the indexed SHA-256 column and falls back
+    to bcrypt for legacy rows. On a legacy match the SHA-256 column is
+    backfilled so subsequent admin calls hit the fast path.
+    """
     raw = token.removeprefix("Bearer ").strip()
 
-    # Load all keys — same approach as proxy (Redis cache in v2)
+    # Identifier resolution still needs the full row set (we match by name/UUID
+    # prefix). Token verification below is what got C3'd.
     result = await session.execute(select(ApiKey))
     keys = result.scalars().all()
 
-    # Find the key matching the identifier (UUID prefix or exact name)
     target: ApiKey | None = None
     for k in keys:
         name_match = k.name == key_identifier
@@ -360,9 +367,18 @@ async def _resolve_and_auth(token: str, key_identifier: str, session: AsyncSessi
     if target is None:
         raise HTTPException(status_code=404, detail="Key not found")
 
-    # Verify the bearer token belongs to this key
-    if not bcrypt.checkpw(raw.encode(), target.tq_token_hash.encode()):
-        raise HTTPException(status_code=401, detail="Token does not match the requested key")
+    # Fast path: indexed SHA-256 compare. Legacy rows (sha256 IS NULL) fall
+    # back to bcrypt and get backfilled in-place.
+    sha = hashlib.sha256(raw.encode()).hexdigest()
+    if target.tq_token_sha256 is not None:
+        if target.tq_token_sha256 != sha:
+            raise HTTPException(status_code=401, detail="Token does not match the requested key")
+    else:
+        if not bcrypt.checkpw(raw.encode(), target.tq_token_hash.encode()):
+            raise HTTPException(status_code=401, detail="Token does not match the requested key")
+        # One-shot upgrade so the next admin request short-circuits.
+        target.tq_token_sha256 = sha
+        await session.commit()
 
     return target
 

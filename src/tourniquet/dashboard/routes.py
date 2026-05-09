@@ -5,6 +5,7 @@ Localhost is the trust boundary; no session/magic-link auth.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import platform
@@ -796,10 +797,14 @@ async def unlift_cap(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 async def rotate_token(request: Request, key_id: uuid.UUID) -> HTMLResponse:
     new_token = _make_tq_token()
     new_hash = _hash_token(new_token)
+    new_sha256 = hashlib.sha256(new_token.encode()).hexdigest()
 
     async with get_session() as session:
         key = await _get_key_or_404(key_id, session)
         key.tq_token_hash = new_hash
+        # C3: SHA-256 column powers the indexed fast-path lookup. bcrypt hash
+        # stays for backward compat during rollout (drop in v0.2).
+        key.tq_token_sha256 = new_sha256
         await session.commit()
 
     return templates.TemplateResponse(request, "key_rotated.html", {
@@ -1133,12 +1138,15 @@ async def create_key(
 
     token = _make_tq_token()
     token_hash = _hash_token(token)
+    token_sha256 = hashlib.sha256(token.encode()).hexdigest()
     encrypted_key = _encrypt_anthropic_key(anthropic_key)
 
     async with get_session() as session:
         key = ApiKey(
             name=name,
             tq_token_hash=token_hash,
+            # C3: indexed fast-path column.
+            tq_token_sha256=token_sha256,
             anthropic_key_encrypted=encrypted_key,
             profile=profile,
             daily_cap_usd_cents=cap_cents,
