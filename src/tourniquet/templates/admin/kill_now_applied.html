@@ -1,0 +1,17 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Killed — Tourniquet{% endblock %}
+{% block content %}
+<h1 class="success">✓ Killed.</h1>
+<p>The next request on <strong>{{ key_name }}</strong> will be blocked (402).
+   Daily cap clamped to <strong>${{ "%.2f"|format(new_cap / 100) }}</strong> (today's spend).</p>
+
+<div class="recover">
+  <p style="margin:0 0 .5rem 0"><strong>Need a little more to finish?</strong> Bump the cap and continue:</p>
+  {% for bump in bumps %}
+    <a href="{{ bump.url }}" class="btn-bump">+${{ bump.label }}</a>
+  {% endfor %}
+  <p style="margin:.5rem 0 0 0;font-size:.85rem;color:#555">Each lift is a 24h temporary raise — auto-expires at midnight UTC.</p>
+</div>
+
+<a href="{{ dashboard_url }}" class="btn-link">Open dashboard →</a>
+{% endblock %}

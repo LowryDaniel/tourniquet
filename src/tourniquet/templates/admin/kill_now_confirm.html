@@ -1,0 +1,14 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Kill {{ key_name }}? — Tourniquet{% endblock %}
+{% block content %}
+<h1>🛑 Kill <em>{{ key_name }}</em>?</h1>
+<div class="warning">
+  This will set <strong>kill_enabled = True</strong> and clamp the daily cap to
+  today's current spend — so the next request will be blocked immediately (402).
+</div>
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button type="submit" class="btn-danger">Confirm kill</button>
+  <a href="{{ dashboard_url }}" class="cancel">Cancel</a>
+</form>
+{% endblock %}

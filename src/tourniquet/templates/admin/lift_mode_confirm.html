@@ -1,0 +1,15 @@
+{% extends "admin/_layout.html" %}
+{% block title %}Lift {{ key_name }}? — Tourniquet{% endblock %}
+{% block content %}
+<h1>Lift <em>{{ key_name }}</em> {{ label }}?</h1>
+<div class="info">
+  Current cap: ${{ "%.2f"|format(current_cap / 100) }} → After lift: <strong>${{ "%.2f"|format(new_cap / 100) }}</strong>.
+  Auto-expires at midnight UTC.
+</div>
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <button type="submit" class="btn">Confirm lift</button>
+  <a href="{{ dashboard_url }}" class="cancel">Cancel</a>
+</form>
+{% endblock %}

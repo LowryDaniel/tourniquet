@@ -19,14 +19,17 @@ import hashlib
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Literal
 
 import bcrypt
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tourniquet.billing.caps import get_today_spend
@@ -35,6 +38,12 @@ from tourniquet.db import get_session
 from tourniquet.models import ApiKey, ApiKeyAction
 
 router = APIRouter(prefix="/admin")
+
+# Admin HTML pages render via Jinja2 (autoescape on) so user-controlled fields
+# like key_name can never break out into <script> — see C2 in
+# docs/code-review-remediation.md.
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 _KILL_NOW_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
 
@@ -65,8 +74,12 @@ async def _assert_token_unused(
 ) -> None:
     """Raise HTTP 400 if this token signature has already been recorded for this key+action.
 
-    Uses api_key_actions as the consumption ledger — no schema change needed.
-    The token_sig is the HMAC tag extracted from the itsdangerous token, stable per issuance.
+    Fast-path early rejection for serial replays. The hard guarantee against
+    concurrent replays comes from the partial unique index
+    ``ix_api_key_actions_unique_token`` on ``(api_key_id, action,
+    details->>'token_sig')`` (migration 0003). On a race the second commit
+    raises ``IntegrityError``; the apply handlers translate that to the same
+    400 response — see ``_REPLAY_DETAIL`` and the IntegrityError catches below.
     """
     result = await session.execute(
         select(ApiKeyAction).where(
@@ -76,7 +89,21 @@ async def _assert_token_unused(
         )
     )
     if result.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=400, detail="This link has already been used.")
+        raise HTTPException(status_code=400, detail=_REPLAY_DETAIL)
+
+
+_REPLAY_DETAIL = "This link has already been used."
+
+
+def _is_token_sig_conflict(exc: IntegrityError) -> bool:
+    """Best-effort check that an IntegrityError came from the
+    ix_api_key_actions_unique_token partial unique index — and not some
+    unrelated constraint we should propagate as a 500.
+
+    Both Postgres (psycopg) and SQLite (aiosqlite) put the offending index
+    name in the original-error string when the partial unique index fires.
+    """
+    return "ix_api_key_actions_unique_token" in str(getattr(exc, "orig", exc))
 
 
 def build_lift_mode_url(key_id: str, mode: str) -> str:
@@ -537,30 +564,15 @@ async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> H
         key_name = key.name
 
     dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Kill {key_name}? — Tourniquet</title>
-<style>
-  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
-  h1 {{font-size:1.5rem;margin-bottom:.5rem}}
-  .warning {{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:.75rem 1rem;margin:1rem 0}}
-  .btn-danger {{background:#dc2626;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:6px;
-                font-size:1rem;cursor:pointer;font-weight:600}}
-  .btn-danger:hover {{background:#b91c1c}}
-  .cancel {{display:inline-block;margin-left:1rem;color:#555;text-decoration:none}}
-</style></head>
-<body>
-<h1>🛑 Kill <em>{key_name}</em>?</h1>
-<div class="warning">
-  This will set <strong>kill_enabled = True</strong> and clamp the daily cap to
-  today's current spend — so the next request will be blocked immediately (402).
-</div>
-<form method="post">
-  <input type="hidden" name="token" value="{token}">
-  <button type="submit" class="btn-danger">Confirm kill</button>
-  <a href="{dashboard_url}" class="cancel">Cancel</a>
-</form>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/kill_now_confirm.html",
+        {
+            "key_name": key_name,
+            "token": token,
+            "dashboard_url": dashboard_url,
+        },
+    )
 
 
 @router.post("/kill-now/{key_id}")
@@ -584,7 +596,14 @@ async def kill_now_apply(
     async with get_session() as session:
         await _assert_token_unused(session, key_id, "kill_now", sig)
 
-    key_name, new_cap = await _apply_kill_now(key_id, token_sig=sig)
+    # m7: rely on ix_api_key_actions_unique_token to atomically reject any
+    # concurrent replay that slipped past the early-rejection check above.
+    try:
+        key_name, new_cap = await _apply_kill_now(key_id, token_sig=sig)
+    except IntegrityError as exc:
+        if _is_token_sig_conflict(exc):
+            raise HTTPException(status_code=400, detail=_REPLAY_DETAIL) from exc
+        raise
 
     # Fire a recovery alert offering one-click bumps via every configured channel
     try:
@@ -595,40 +614,26 @@ async def kill_now_apply(
 
     # Inline recovery buttons on the success page so user can act without leaving the browser
     from tourniquet.alerts.notifier import recovery_amounts_cents
-    bumps = recovery_amounts_cents(new_cap)
-    bump_buttons_html = "\n".join(
-        f'<a href="{build_lift_by_amount_url(str(key_id), c)}" class="btn-bump">+${c // 100 if c % 100 == 0 else f"{c/100:.2f}"}</a>'
-        for c in bumps
-    )
+    bumps_cents = recovery_amounts_cents(new_cap)
+    bumps = [
+        {
+            "url": build_lift_by_amount_url(str(key_id), c),
+            "label": f"{c // 100}" if c % 100 == 0 else f"{c / 100:.2f}",
+        }
+        for c in bumps_cents
+    ]
 
     dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Killed — Tourniquet</title>
-<style>
-  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
-  h1 {{font-size:1.5rem;color:#16a34a}}
-  .recover {{background:#f0f9ff;border:1px solid #93c5fd;border-radius:6px;padding:1rem;margin:1.5rem 0}}
-  .btn {{display:inline-block;background:#2563eb;color:#fff;padding:.5rem 1.2rem;
-         border-radius:6px;text-decoration:none;font-weight:600;margin-top:1rem}}
-  .btn-bump {{display:inline-block;background:#16a34a;color:#fff;padding:.5rem 1rem;
-              border-radius:6px;text-decoration:none;font-weight:600;margin:.25rem .5rem .25rem 0;
-              font-size:1.1rem}}
-  .btn-bump:hover {{background:#15803d}}
-</style></head>
-<body>
-<h1>✓ Killed.</h1>
-<p>The next request on <strong>{key_name}</strong> will be blocked (402).
-   Daily cap clamped to <strong>${new_cap / 100:.2f}</strong> (today's spend).</p>
-
-<div class="recover">
-  <p style="margin:0 0 .5rem 0"><strong>Need a little more to finish?</strong> Bump the cap and continue:</p>
-  {bump_buttons_html}
-  <p style="margin:.5rem 0 0 0;font-size:.85rem;color:#555">Each lift is a 24h temporary raise — auto-expires at midnight UTC.</p>
-</div>
-
-<a href="{dashboard_url}" class="btn">Open dashboard →</a>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/kill_now_applied.html",
+        {
+            "key_name": key_name,
+            "new_cap": new_cap,
+            "bumps": bumps,
+            "dashboard_url": dashboard_url,
+        },
+    )
 
 
 async def _fire_recovery_alert(key_id: uuid.UUID, key_name: str, new_cap_cents: int) -> None:
@@ -688,31 +693,19 @@ async def lift_mode_confirm(
             new_cap = key.absolute_ceiling_usd_cents
             label = f"to ceiling — ${new_cap / 100:.2f}"
 
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Lift {key_name}? — Tourniquet</title>
-<style>
-  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
-  h1 {{font-size:1.4rem}}
-  .info {{background:#f0f9ff;border:1px solid #93c5fd;border-radius:6px;padding:.75rem 1rem;margin:1rem 0}}
-  .btn {{background:#16a34a;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:6px;
-         font-size:1rem;cursor:pointer;font-weight:600}}
-  .btn:hover {{background:#15803d}}
-  .cancel {{margin-left:1rem;color:#555;text-decoration:none}}
-</style></head>
-<body>
-<h1>Lift <em>{key_name}</em> {label}?</h1>
-<div class="info">
-  Current cap: ${current_cap / 100:.2f} → After lift: <strong>${new_cap / 100:.2f}</strong>.
-  Auto-expires at midnight UTC.
-</div>
-<form method="post">
-  <input type="hidden" name="token" value="{token}">
-  <input type="hidden" name="mode" value="{mode}">
-  <button type="submit" class="btn">Confirm lift</button>
-  <a href="{settings.app_base_url}/dashboard/key/{key_id}" class="cancel">Cancel</a>
-</form>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/lift_mode_confirm.html",
+        {
+            "key_name": key_name,
+            "label": label,
+            "mode": mode,
+            "token": token,
+            "current_cap": current_cap,
+            "new_cap": new_cap,
+            "dashboard_url": f"{settings.app_base_url}/dashboard/key/{key_id}",
+        },
+    )
 
 
 @router.post("/lift-mode/{key_id}")
@@ -735,6 +728,8 @@ async def lift_mode_apply(
 
     sig = _token_sig(token)
     async with get_session() as session:
+        # m7: early-rejection (single-shot replays); the partial unique index
+        # is the hard guarantee against concurrent races (translated below).
         await _assert_token_unused(session, key_id, "lift_mode", sig)
 
         key = await session.get(ApiKey, key_id)
@@ -763,18 +758,23 @@ async def lift_mode_apply(
         }
         summary = f"Lift {mode} via web — cap now ${new_cap / 100:.2f} until midnight UTC"
         await record_action(session, key.id, ACTION_LIFT_MODE, "web", summary, details=lift_mode_details)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            await session.rollback()
+            if _is_token_sig_conflict(exc):
+                raise HTTPException(status_code=400, detail=_REPLAY_DETAIL) from exc
+            raise
 
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Lifted — Tourniquet</title>
-<style>body{{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem}}
-h1{{color:#16a34a}}.btn{{display:inline-block;background:#2563eb;color:#fff;padding:.5rem 1.2rem;
-border-radius:6px;text-decoration:none;font-weight:600;margin-top:1rem}}</style></head><body>
-<h1>✓ Lifted.</h1>
-<p><strong>{key_name}</strong> daily cap raised to <strong>${new_cap / 100:.2f}</strong>
-   until midnight UTC.</p>
-<a href="{settings.app_base_url}/dashboard/key/{key_id}" class="btn">Open dashboard →</a>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/lift_mode_applied.html",
+        {
+            "key_name": key_name,
+            "new_cap": new_cap,
+            "dashboard_url": f"{settings.app_base_url}/dashboard/key/{key_id}",
+        },
+    )
 
 
 # ── /admin/lift-by-amount/{key_id} ────────────────────────────────────────────
@@ -804,33 +804,17 @@ async def lift_by_amount_confirm(
         key_name = key.name
         current_cap = key.lifted_cap_usd_cents or key.daily_cap_usd_cents
 
-    new_cap_after = min(current_cap + amount, 0)  # placeholder for label below
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Bump cap — Tourniquet</title>
-<style>
-  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
-  h1 {{font-size:1.4rem}}
-  .info {{background:#f0f9ff;border:1px solid #93c5fd;border-radius:6px;padding:.75rem 1rem;margin:1rem 0}}
-  .btn {{background:#16a34a;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:6px;
-         font-size:1rem;cursor:pointer;font-weight:600}}
-  .btn:hover {{background:#15803d}}
-  .cancel {{margin-left:1rem;color:#555;text-decoration:none}}
-</style></head>
-<body>
-<h1>Bump <em>{key_name}</em> by ${amount / 100:.2f}?</h1>
-<div class="info">
-  Current cap: <strong>${current_cap / 100:.2f}</strong> →
-  After bump: <strong>${(current_cap + amount) / 100:.2f}</strong><br>
-  Lift auto-expires at midnight UTC (24h max).
-</div>
-<form method="post">
-  <input type="hidden" name="token" value="{token}">
-  <input type="hidden" name="amount" value="{amount}">
-  <button type="submit" class="btn">Confirm bump</button>
-  <a href="{settings.app_base_url}/dashboard/key/{key_id}" class="cancel">Cancel</a>
-</form>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/lift_by_amount_confirm.html",
+        {
+            "key_name": key_name,
+            "amount": amount,
+            "current_cap": current_cap,
+            "token": token,
+            "dashboard_url": f"{settings.app_base_url}/dashboard/key/{key_id}",
+        },
+    )
 
 
 @router.post("/lift-by-amount/{key_id}")
@@ -856,23 +840,26 @@ async def lift_by_amount_apply(
     async with get_session() as session:
         await _assert_token_unused(session, key_id, "lift_by_amount", sig)
 
-    key_name, new_lifted, ceiling_clamped = await _apply_lift_by_amount(key_id, amount, token_sig=sig)
+    # m7: rely on ix_api_key_actions_unique_token to atomically reject any
+    # concurrent replay that slipped past the early-rejection check above.
+    try:
+        key_name, new_lifted, ceiling_clamped = await _apply_lift_by_amount(
+            key_id, amount, token_sig=sig
+        )
+    except IntegrityError as exc:
+        if _is_token_sig_conflict(exc):
+            raise HTTPException(status_code=400, detail=_REPLAY_DETAIL) from exc
+        raise
 
     note = " (clamped to ceiling)" if ceiling_clamped else ""
     dashboard_url = f"{settings.app_base_url}/dashboard/key/{key_id}"
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Bumped — Tourniquet</title>
-<style>
-  body {{font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 1rem;color:#111}}
-  h1 {{font-size:1.5rem;color:#16a34a}}
-  .btn {{display:inline-block;background:#2563eb;color:#fff;padding:.5rem 1.2rem;
-         border-radius:6px;text-decoration:none;font-weight:600;margin-top:1rem}}
-</style></head>
-<body>
-<h1>✓ Cap bumped.</h1>
-<p><strong>{key_name}</strong> can now spend up to
-   <strong>${new_lifted / 100:.2f}</strong> today{note}.</p>
-<p>The lift expires at midnight UTC. After that, the original daily cap returns.</p>
-<a href="{dashboard_url}" class="btn">Open dashboard →</a>
-</body></html>""")
+    return templates.TemplateResponse(
+        request,
+        "admin/lift_by_amount_applied.html",
+        {
+            "key_name": key_name,
+            "new_lifted": new_lifted,
+            "note": note,
+            "dashboard_url": dashboard_url,
+        },
+    )
