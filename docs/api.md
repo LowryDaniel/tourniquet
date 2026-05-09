@@ -42,11 +42,28 @@ Transparent pass-through to `api.anthropic.com/v1/messages`. Accepts and returns
 Standard Anthropic SSE event sequence. Tourniquet does not reformat events.
 
 **Cap-hit response (mid-stream):**
-```
-data: {"type":"message_stop","stop_reason":"tourniquet_cap_hit"}
+
+When the cap is hit while a stream is in flight, Tourniquet emits two
+back-to-back SSE blocks and then closes the connection:
 
 ```
-Connection closes after this event.
+event: message_stop
+data: {"type":"message_stop","stop_reason":"end_turn"}
+
+event: error
+data: {"type":"error","error":{"type":"tourniquet_cap_hit","message":"Daily spend cap reached. Resets at midnight UTC.","cap_usd_cents":500,"spent_usd_cents":512,"resets_at":"2026-05-10T00:00:00+00:00"}}
+
+```
+
+The `message_stop` carries `stop_reason: "end_turn"` — one of Anthropic's
+documented enum values — so strict-validating SDKs (Pydantic on `anthropic`,
+Zod on `@anthropic-ai/sdk`) accept it as a normal terminator. The synthetic
+`event: error` block immediately after carries the cap-hit payload for
+clients that surface unknown SSE events.
+
+Non-streaming clients (or middleboxes that don't parse SSE) can additionally
+detect a cap-hit response via the `X-Tourniquet-Cap-Hit: 1` HTTP response
+header, which is set whenever a cap-hit `event: error` block was emitted.
 
 **Cap-hit response (pre-flight — request arrives after cap hit):**
 ```
