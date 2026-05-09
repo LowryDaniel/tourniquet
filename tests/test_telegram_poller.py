@@ -9,6 +9,21 @@ import pytest
 from tourniquet.alerts.telegram_poller import TelegramPoller
 
 
+def _mock_telegram_client() -> AsyncMock:
+    """Build a Mock for httpx.AsyncClient that won't leak unawaited coroutines.
+
+    httpx.Response.json() is sync — without this scaffold, AsyncMock would
+    return an unawaited coroutine from .json() and TelegramPoller._call would
+    leak it on every dispatch (visible as 'coroutine was never awaited'
+    RuntimeWarning).
+    """
+    client = AsyncMock()
+    resp = MagicMock()
+    resp.json = MagicMock(return_value={"ok": True, "result": []})
+    client.post = AsyncMock(return_value=resp)
+    return client
+
+
 @pytest.mark.asyncio
 async def test_poller_skips_start_when_token_missing():
     """No bot token → poller is a no-op (doesn't crash, doesn't spin a task)."""
@@ -22,7 +37,7 @@ async def test_poller_skips_start_when_token_missing():
 async def test_dispatch_routes_lift_by_amount():
     """A 'lift_by_amount|<id>|<cents>' callback dispatches to the right handler."""
     p = TelegramPoller()
-    p._client = AsyncMock()  # used by _answer_callback_query / _edit_message_text
+    p._client = _mock_telegram_client()  # used by _answer_callback_query / _edit_message_text
     update = {
         "update_id": 1,
         "callback_query": {
@@ -43,7 +58,7 @@ async def test_dispatch_routes_lift_by_amount():
 async def test_dispatch_routes_kill_now_then_fires_recovery():
     """A 'kill_now|<id>' callback applies the kill AND fires the recovery alert."""
     p = TelegramPoller()
-    p._client = AsyncMock()
+    p._client = _mock_telegram_client()
     update = {
         "update_id": 1,
         "callback_query": {
@@ -65,7 +80,7 @@ async def test_dispatch_routes_kill_now_then_fires_recovery():
 async def test_dispatch_lift_by_amount_zero_means_leave_it():
     """cents=0 maps to 'Leave it' — no-op handler call but still acks."""
     p = TelegramPoller()
-    p._client = AsyncMock()
+    p._client = _mock_telegram_client()
     update = {
         "update_id": 1,
         "callback_query": {
@@ -87,7 +102,7 @@ async def test_dispatch_lift_by_amount_zero_means_leave_it():
 async def test_dispatch_unknown_callback_type_is_silent():
     """Unrecognised callback_data is acked but nothing else happens — defensive."""
     p = TelegramPoller()
-    p._client = AsyncMock()
+    p._client = _mock_telegram_client()
     update = {
         "update_id": 1,
         "callback_query": {

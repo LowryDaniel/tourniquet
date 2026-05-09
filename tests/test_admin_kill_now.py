@@ -195,6 +195,10 @@ async def test_apply_kill_now_sets_lifted_cap_and_preserves_daily_cap():
     @asynccontextmanager
     async def _fake_session():
         session = AsyncMock()
+        # session.add() is sync in real SQLAlchemy — without this MagicMock the
+        # AsyncMock parent would return an unawaited coroutine from session.add(...)
+        # via audit.record_action, leaking 'coroutine was never awaited' warnings.
+        session.add = MagicMock()
         session.get = AsyncMock(return_value=mock_key)
         session.commit = AsyncMock()
         yield session
@@ -234,6 +238,10 @@ async def test_apply_kill_now_zero_spend_floors_lifted_at_one_cent():
     @asynccontextmanager
     async def _fake_session():
         session = AsyncMock()
+        # session.add() is sync in real SQLAlchemy — without this MagicMock the
+        # AsyncMock parent would return an unawaited coroutine from session.add(...)
+        # via audit.record_action, leaking 'coroutine was never awaited' warnings.
+        session.add = MagicMock()
         session.get = AsyncMock(return_value=mock_key)
         session.commit = AsyncMock()
         yield session
