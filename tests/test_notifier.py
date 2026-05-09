@@ -70,8 +70,8 @@ async def test_fanout_writes_jsonl_even_with_no_channels(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", ""),
     ):
         results = await fan_out(base_event)
@@ -102,8 +102,8 @@ async def test_fanout_only_calls_configured_channels(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", ""),
     ):
         results = await fan_out(base_event)
@@ -130,8 +130,8 @@ async def test_slack_failure_returned_not_raised(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", ""),
     ):
         results = await fan_out(base_event)
@@ -156,8 +156,8 @@ async def test_telegram_failure_returned_not_raised(
         patch("tourniquet.config.settings.telegram_bot_token", "123"),
         patch("tourniquet.config.settings.telegram_chat_id", "456"),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", ""),
     ):
         results = await fan_out(base_event)
@@ -177,8 +177,8 @@ async def test_mac_notification_skipped_osascript_on_non_darwin(
     with (
         patch("sys.platform", "linux"),
         patch("subprocess.run", mock_run),
-        patch("tourniquet.config.settings.enable_mac_notifications", "true"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", True),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.slack_webhook_url", ""),
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
@@ -203,8 +203,8 @@ async def test_desktop_notification_uses_plyer_on_win32() -> None:
 
     with (
         patch("sys.platform", "win32"),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", "true"),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", True),
         patch.dict("sys.modules", {"plyer": mock_plyer}),
     ):
         from importlib import reload
@@ -231,8 +231,8 @@ async def test_desktop_notification_no_op_when_plyer_missing() -> None:
 
     with (
         patch("sys.platform", "linux"),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", "true"),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", True),
         patch("builtins.__import__", side_effect=_fake_import),
     ):
         from importlib import reload
@@ -350,8 +350,8 @@ async def test_email_reports_skipped_when_no_creds(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", ""),
     ):
         results = await fan_out(base_event)
@@ -371,8 +371,8 @@ async def test_email_dispatched_when_creds_present(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", "re_fake"),
         patch("tourniquet.config.settings.resend_from_email", "alerts@example.com"),
         patch("resend.Emails.send", mock_send),
@@ -404,8 +404,8 @@ async def test_email_uses_per_key_alert_email_when_set(
         patch("tourniquet.config.settings.telegram_bot_token", ""),
         patch("tourniquet.config.settings.telegram_chat_id", ""),
         patch("tourniquet.config.settings.alert_webhook_url", ""),
-        patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-        patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
         patch("tourniquet.config.settings.resend_api_key", "re_fake"),
         patch("tourniquet.config.settings.resend_from_email", "alerts@example.com"),
         patch("resend.Emails.send", mock_send),
@@ -439,8 +439,8 @@ async def test_webhook_url_not_in_logs(
             patch("tourniquet.config.settings.telegram_bot_token", ""),
             patch("tourniquet.config.settings.telegram_chat_id", ""),
             patch("tourniquet.config.settings.alert_webhook_url", ""),
-            patch("tourniquet.config.settings.enable_mac_notifications", "false"),
-            patch("tourniquet.config.settings.enable_desktop_notifications", ""),
+            patch("tourniquet.config.settings.enable_mac_notifications", False),
+            patch("tourniquet.config.settings.enable_desktop_notifications", False),
             patch("tourniquet.config.settings.resend_api_key", ""),
         ):
             await fan_out(base_event)
