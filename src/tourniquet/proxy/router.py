@@ -2,18 +2,27 @@
 
 POST /v1/messages:
   1. Verify tq_* token → load api_key row
-  2. Pre-flight cap check → 402 if already over cap
-  3. Decrypt Anthropic key
-  4. Stream request through providers/anthropic.py
+  2. Pre-flight estimate worst-case cost (input+max_tokens at request rate)
+  3. Atomically reserve worst-case in caps_today → 402 if it would bust cap
+  4. Decrypt Anthropic key, forward request to providers/anthropic.py
   5. On cap cross mid-stream: inject synthetic message_stop
-  6. Persist usage_event + update caps_today
+  6. Persist usage_event + reconcile (actual − reserved, may be negative)
+
+C1 (atomic reservation) — replaces the prior read-decide-write sequence.
+The old pattern read `spent_cents`, made a 402-or-pass decision, then wrote
+spend after the upstream call. Under concurrency, N parallel requests would
+all observe the same stale `spent_cents` and all pass — the cap was soft.
+The new flow uses a single SQL `INSERT ... ON CONFLICT DO UPDATE WHERE` so
+the check-and-increment is atomic. After the upstream call settles we
+reconcile by adding `(actual − reserved)` (which can be negative — the
+reservation always reflects worst case, so we usually refund).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import bcrypt
 import httpx
@@ -22,7 +31,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tourniquet.billing.caps import add_spend, get_today_spend, is_over_cap
+from tourniquet.billing.caps import add_spend, get_today_spend, is_over_cap, reserve_or_reject
 from tourniquet.billing.formatting import format_money
 from tourniquet.billing.pricing import cost_usd_cents
 from tourniquet.config import settings
@@ -124,6 +133,64 @@ async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
     return key
 
 
+def _estimate_worst_case_cents(parsed_body: dict) -> tuple[str, int]:
+    """Estimate the worst-case cost (in USD cents) of a request from its body.
+
+    Worst case = (estimated input tokens from message char count, +25% pad)
+    + max_tokens output. This is what we reserve up front so concurrent
+    requests on the same key can't all squeak past a stale spent_cents
+    read. Reconciliation refunds the over-estimate after the upstream
+    response settles.
+    """
+    req_model = parsed_body.get("model", "claude-sonnet-4-6") or "claude-sonnet-4-6"
+    req_max_tokens = int(parsed_body.get("max_tokens", 4096) or 4096)
+    messages = parsed_body.get("messages", []) or []
+    chars = 0
+    for m in messages:
+        c = m.get("content")
+        if isinstance(c, str):
+            chars += len(c)
+        elif isinstance(c, list):
+            for block in c:
+                if isinstance(block, dict) and isinstance(block.get("text"), str):
+                    chars += len(block["text"])
+    # Char-count heuristic: ~4 chars per token, padded 25% for safety.
+    est_input_tokens = max(1, int(chars / 4 * 1.25))
+    return req_model, cost_usd_cents(req_model, est_input_tokens, req_max_tokens)
+
+
+def _cap_hit_payload(
+    *,
+    cap_cents: int,
+    spent_cents: int,
+    today: date,
+    lift_active: bool,
+    lift_expires_at_iso: str | None,
+) -> dict:
+    """Build the canonical 402 `tourniquet_cap_hit` payload."""
+    resets_at = (
+        datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+        + timedelta(days=1)
+    )
+    currency = settings.display_currency
+    return {
+        "error": {
+            "type": "tourniquet_cap_hit",
+            "message": "Daily spend cap reached. Resets at midnight UTC.",
+            "resets_at": resets_at.isoformat(),
+            "cap_usd_cents": cap_cents,
+            "spent_usd_cents": spent_cents,
+            "lift_active": lift_active,
+            "lift_expires_at": lift_expires_at_iso,
+            "display": {
+                "cap": format_money(cap_cents, currency),
+                "spent": format_money(spent_cents, currency),
+                "currency": currency,
+            },
+        }
+    }
+
+
 @router.post("/v1/messages", response_model=None)
 async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
     auth_header = request.headers.get("authorization", "")
@@ -137,7 +204,6 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
 
         now = datetime.now(timezone.utc)
         today = date.today()
-        spent_cents = await get_today_spend(api_key.id, today, session)
         cap_cents = _effective_cap(api_key, now)
         lift_active = (
             api_key.lifted_cap_usd_cents is not None
@@ -146,42 +212,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
         )
         lift_expires_at_iso = api_key.lift_expires_at.isoformat() if lift_active else None
 
-        if api_key.kill_enabled and is_over_cap(spent_cents, cap_cents):
-            from datetime import timedelta
-            resets_at = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
-            resets_at = resets_at + timedelta(days=1)
-            currency = settings.display_currency
-            return JSONResponse(
-                status_code=402,
-                content={
-                    "error": {
-                        "type": "tourniquet_cap_hit",
-                        "message": "Daily spend cap reached. Resets at midnight UTC.",
-                        "resets_at": resets_at.isoformat(),
-                        "cap_usd_cents": cap_cents,
-                        "spent_usd_cents": spent_cents,
-                        "lift_active": lift_active,
-                        "lift_expires_at": lift_expires_at_iso,
-                        "display": {
-                            "cap": format_money(cap_cents, currency),
-                            "spent": format_money(spent_cents, currency),
-                            "currency": currency,
-                        },
-                    }
-                },
-            )
-
-        anthropic_key = _decrypt_anthropic_key(api_key.anthropic_key_encrypted)
-
-        forward_headers = {
-            k: v for k, v in request.headers.items()
-            if k.lower() in ("content-type", "anthropic-version", "anthropic-beta")
-        }
-
-        # Capture user-agent and metadata.user_id for analytics
-        user_agent = request.headers.get("user-agent", "")[:255]
-
-        # Single body parse — used for metadata, streaming detection, and max-cost guard
+        # Single body parse — used for metadata, streaming detection, and worst-case cost.
         try:
             parsed = json.loads(body)
         except Exception:
@@ -192,74 +223,51 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
             metadata_user_id = str(metadata_user_id)[:255]
 
         is_streaming = bool(parsed.get("stream", False))
+        user_agent = request.headers.get("user-agent", "")[:255]
 
-        # ── Pre-flight max-cost guard ─────────────────────────────────────────
-        # Before forwarding to Anthropic, estimate the request's worst-case cost
-        # (input tokens + max_tokens output) and reject with 402 if it would
-        # exceed today's effective cap by more than both the absolute and
-        # percentage-based tolerances. This stops obviously oversized requests
-        # before they waste API tokens. Small overages are allowed (let it ride)
-        # — overage must exceed BOTH abs and pct thresholds to trigger the block.
-
+        # ── C1: atomic reservation ────────────────────────────────────────────
+        # The old pattern read spent_cents, decided 402-or-pass, then wrote
+        # spend after the upstream call. Under bursty concurrency (Claude
+        # Code firing 5–20 parallel tool calls on the same key) this was a
+        # soft cap. Now we reserve the worst-case cost atomically, fail
+        # fast if it would bust the cap, and reconcile after.
+        reserved_cents = 0
         if api_key.kill_enabled:
-            req_model = parsed.get("model", "claude-sonnet-4-6")
-            req_max_tokens = int(parsed.get("max_tokens", 4096) or 4096)
-            messages = parsed.get("messages", []) or []
-            # Rough char-count heuristic for input tokens. Over-estimate by 25%
-            # to err on the safe side (better a false 402 than an unbilled runaway).
-            chars = 0
-            for m in messages:
-                c = m.get("content")
-                if isinstance(c, str):
-                    chars += len(c)
-                elif isinstance(c, list):
-                    for block in c:
-                        if isinstance(block, dict) and isinstance(block.get("text"), str):
-                            chars += len(block["text"])
-            est_input_tokens = max(1, int(chars / 4 * 1.25))
-            worst_case_cents = cost_usd_cents(req_model, est_input_tokens, req_max_tokens)
-            projected_total = spent_cents + worst_case_cents
-            if projected_total > cap_cents:
-                overage = projected_total - cap_cents
-                tolerance = max(
-                    settings.max_overage_abs_cents,
-                    int(cap_cents * settings.max_overage_pct / 100),
+            _model, reserved_cents = _estimate_worst_case_cents(parsed)
+            ok = await reserve_or_reject(
+                api_key.id, today, reserved_cents, cap_cents, session
+            )
+            if not ok:
+                # Reservation rejected — read the current spend for the
+                # response payload (best-effort; the actual gate already
+                # ran in SQL).
+                spent_cents = await get_today_spend(api_key.id, today, session)
+                return JSONResponse(
+                    status_code=402,
+                    content=_cap_hit_payload(
+                        cap_cents=cap_cents,
+                        spent_cents=spent_cents,
+                        today=today,
+                        lift_active=lift_active,
+                        lift_expires_at_iso=lift_expires_at_iso,
+                    ),
                 )
-                if overage > tolerance:
-                    from datetime import timedelta as _td
-                    resets_at = (datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
-                                 + _td(days=1))
-                    currency = settings.display_currency
-                    return JSONResponse(
-                        status_code=402,
-                        content={
-                            "error": {
-                                "type": "tourniquet_preflight_block",
-                                "message": (
-                                    f"Request would push spend to ~{format_money(projected_total, currency)}, "
-                                    f"over your {format_money(cap_cents, currency)} cap by "
-                                    f"{format_money(overage, currency)} (tolerance "
-                                    f"{format_money(tolerance, currency)}). Lower max_tokens, shorten the "
-                                    f"prompt, or lift today's cap."
-                                ),
-                                "resets_at": resets_at.isoformat(),
-                                "cap_usd_cents": cap_cents,
-                                "spent_usd_cents": spent_cents,
-                                "projected_usd_cents": projected_total,
-                                "tolerance_usd_cents": tolerance,
-                                "display": {
-                                    "cap": format_money(cap_cents, currency),
-                                    "spent": format_money(spent_cents, currency),
-                                    "projected": format_money(projected_total, currency),
-                                    "tolerance": format_money(tolerance, currency),
-                                    "currency": currency,
-                                },
-                            }
-                        },
-                    )
-        # ────────────────────────────────────────────────────────────────────
+            # Commit the reservation NOW so concurrent requests see the
+            # booked spend on their own atomic check.
+            await session.commit()
 
-        # ── Non-streaming path: forward, parse JSON usage, persist, return ─────
+        # `spent_cents` for cap-cross checks during the upstream stream — read
+        # AFTER the reservation so it reflects this request's booking too.
+        spent_cents_with_reservation = await get_today_spend(api_key.id, today, session)
+
+        anthropic_key = _decrypt_anthropic_key(api_key.anthropic_key_encrypted)
+
+        forward_headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() in ("content-type", "anthropic-version", "anthropic-beta")
+        }
+
+        # ── Non-streaming path: forward, parse JSON usage, persist, reconcile ──
         if not is_streaming:
             from tourniquet.config import settings as _s
             forward_headers["x-api-key"] = anthropic_key
@@ -284,7 +292,11 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
             except Exception:
                 pass
 
-            cost = cost_usd_cents(model_used or "claude-sonnet-4-6", in_tokens, out_tokens)
+            actual_cost = cost_usd_cents(model_used or "claude-sonnet-4-6", in_tokens, out_tokens)
+            # Reconcile: add (actual − reserved). Can be negative (refund of
+            # over-estimate) or positive (under-estimate top-up — rare since
+            # max_tokens caps the output).
+            reconcile_delta = actual_cost - reserved_cents
 
             async with get_session() as write_session:
                 event = UsageEvent(
@@ -293,22 +305,27 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     model=model_used or "unknown",
                     input_tokens=in_tokens,
                     output_tokens=out_tokens,
-                    cost_usd_cents=cost,
+                    cost_usd_cents=actual_cost,
                     cap_hit=False,
                     user_agent=user_agent or None,
                     metadata_user_id=metadata_user_id,
                 )
                 write_session.add(event)
-                await add_spend(api_key.id, today, cost, write_session)
+                if reconcile_delta != 0:
+                    await add_spend(api_key.id, today, reconcile_delta, write_session)
                 # Threshold-alert wiring — fire 50%/80%/cap-hit alerts at most
                 # once per day per key. Audit row is written to the same
                 # session so it commits atomically with the spend.
                 # Background fan_out task is spawned so the proxy response
                 # isn't held up by Slack/Telegram round-trips.
                 from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+                # Spend-after-this-request reflects the reconciled total.
+                spend_after = (
+                    spent_cents_with_reservation - reserved_cents + actual_cost
+                )
                 await maybe_fire_threshold_alert(
                     api_key,
-                    spent_cents + cost,
+                    spend_after,
                     cap_cents,
                     today,
                     kill_enabled=api_key.kill_enabled,
@@ -324,12 +341,22 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
 
         # ── Streaming path (original SSE-with-kill flow) ──────────────────────
         accumulated: UsageAccumulator | None = None
+        # The accumulator-based mid-stream cap-cross check still uses
+        # `spent_cents_with_reservation` as the floor. Because we already
+        # reserved worst-case, the reservation alone shouldn't trip this —
+        # but if the reservation is somehow under (e.g. char heuristic
+        # under-counts and actual usage exceeds reserved + remaining cap),
+        # the kill switch still fires.
 
         async def _cap_check(acc: UsageAccumulator) -> bool:
             if not api_key.kill_enabled:
                 return False
             c = cost_usd_cents(acc.model or "claude-sonnet-4-6", acc.input_tokens, acc.output_tokens)
-            return is_over_cap(spent_cents + c, cap_cents)
+            # spent_cents_with_reservation already counts THIS request's
+            # worst-case reservation, so subtract it back out before adding
+            # the actual cost so far.
+            spent_other = spent_cents_with_reservation - reserved_cents
+            return is_over_cap(spent_other + c, cap_cents)
 
         async def _generate():
             nonlocal accumulated
@@ -346,13 +373,14 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     cap_was_hit = True
                 yield chunk
 
-            # Persist usage after stream completes
+            # Persist usage + reconcile after stream completes
             if accumulated:
-                c = cost_usd_cents(
+                actual_cost = cost_usd_cents(
                     accumulated.model or "claude-sonnet-4-6",
                     accumulated.input_tokens,
                     accumulated.output_tokens,
                 )
+                reconcile_delta = actual_cost - reserved_cents
                 async with get_session() as write_session:
                     event = UsageEvent(
                         api_key_id=api_key.id,
@@ -360,20 +388,24 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                         model=accumulated.model or "unknown",
                         input_tokens=accumulated.input_tokens,
                         output_tokens=accumulated.output_tokens,
-                        cost_usd_cents=c,
+                        cost_usd_cents=actual_cost,
                         cap_hit=cap_was_hit,
                         user_agent=user_agent or None,
                         metadata_user_id=metadata_user_id,
                     )
                     write_session.add(event)
-                    await add_spend(api_key.id, today, c, write_session)
+                    if reconcile_delta != 0:
+                        await add_spend(api_key.id, today, reconcile_delta, write_session)
                     # Threshold-alert wiring (streaming path) — same idempotency
                     # guarantees as the non-streaming path. Sees the spend
                     # *after* this stream's contribution.
                     from tourniquet.alerts.notifier import maybe_fire_threshold_alert
+                    spend_after = (
+                        spent_cents_with_reservation - reserved_cents + actual_cost
+                    )
                     await maybe_fire_threshold_alert(
                         api_key,
-                        spent_cents + c,
+                        spend_after,
                         cap_cents,
                         today,
                         kill_enabled=api_key.kill_enabled,
