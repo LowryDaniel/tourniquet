@@ -26,20 +26,34 @@ from datetime import date, datetime, timedelta, timezone
 
 import bcrypt
 import httpx
+from cryptography.fernet import Fernet
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tourniquet.alerts.notifier import maybe_fire_threshold_alert
 from tourniquet.billing.caps import add_spend, get_today_spend, is_over_cap, reserve_or_reject
 from tourniquet.billing.formatting import format_money
 from tourniquet.billing.pricing import cost_usd_cents
 from tourniquet.config import settings
 from tourniquet.db import get_session
 from tourniquet.models import ApiKey, UsageEvent
-from tourniquet.providers.anthropic import UsageAccumulator, stream_request
+from tourniquet.providers.anthropic import (
+    CAP_HIT_HEADER,
+    FORWARD_HEADERS as _FORWARD_HEADERS,
+    UsageAccumulator,
+    stream_request,
+)
 
 router = APIRouter()
+
+
+# ── Module-scope singletons ──────────────────────────────────────────────────
+# Fernet key parsing/validation runs at import time so a bad FERNET_KEY fails
+# fast at startup rather than on the first proxy request. `dashboard/routes.py`
+# already follows this pattern; we mirror it here.
+_FERNET = Fernet(settings.fernet_key.encode())
 
 
 def _effective_cap(api_key: ApiKey, now: datetime) -> int:
@@ -69,10 +83,7 @@ def _effective_cap(api_key: ApiKey, now: datetime) -> int:
 
 
 def _decrypt_anthropic_key(encrypted: str) -> str:
-    from cryptography.fernet import Fernet
-
-    f = Fernet(settings.fernet_key.encode())
-    return f.decrypt(encrypted.encode()).decode()
+    return _FERNET.decrypt(encrypted.encode()).decode()
 
 
 async def _legacy_bcrypt_scan(raw: str, session: AsyncSession) -> ApiKey | None:
@@ -197,7 +208,19 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
     if not auth_header:
         raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Missing Authorization header."})
 
-    body = await request.body()
+    # M4 — bound the in-memory body read. `await request.body()` would buffer
+    # an unbounded payload into memory; on Tailscale / cloud-VM deploys a
+    # malicious 1 GB POST would OOM the worker. Stream chunk-by-chunk and
+    # bail at the first byte over the configured ceiling.
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf.extend(chunk)
+        if len(buf) > settings.max_request_body_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail="Request body exceeds configured limit.",
+            )
+    body = bytes(buf)
 
     async with get_session() as session:
         api_key = await _resolve_api_key(auth_header, session)
@@ -242,6 +265,10 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 # response payload (best-effort; the actual gate already
                 # ran in SQL).
                 spent_cents = await get_today_spend(api_key.id, today, session)
+                # W1 follow-up: the provider exports CAP_HIT_HEADER but the
+                # proxy never set it. Non-streaming clients that read past
+                # the body (e.g. SDKs surfacing response headers) can now
+                # branch on this single bit instead of JSON-parsing the body.
                 return JSONResponse(
                     status_code=402,
                     content=_cap_hit_payload(
@@ -251,6 +278,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                         lift_active=lift_active,
                         lift_expires_at_iso=lift_expires_at_iso,
                     ),
+                    headers={CAP_HIT_HEADER: "1"},
                 )
             # Commit the reservation NOW so concurrent requests see the
             # booked spend on their own atomic check.
@@ -262,17 +290,16 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
 
         anthropic_key = _decrypt_anthropic_key(api_key.anthropic_key_encrypted)
 
+        # M5 — single source of truth for the forwarded-header whitelist.
         forward_headers = {
-            k: v for k, v in request.headers.items()
-            if k.lower() in ("content-type", "anthropic-version", "anthropic-beta")
+            k: v for k, v in request.headers.items() if k.lower() in _FORWARD_HEADERS
         }
 
         # ── Non-streaming path: forward, parse JSON usage, persist, reconcile ──
         if not is_streaming:
-            from tourniquet.config import settings as _s
             forward_headers["x-api-key"] = anthropic_key
             forward_headers.setdefault("anthropic-version", "2023-06-01")
-            url = f"{_s.anthropic_base_url}/v1/messages"
+            url = f"{settings.anthropic_base_url}/v1/messages"
 
             async with httpx.AsyncClient(timeout=60.0) as client:
                 upstream = await client.post(url, content=body, headers=forward_headers)
@@ -318,7 +345,6 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 # session so it commits atomically with the spend.
                 # Background fan_out task is spawned so the proxy response
                 # isn't held up by Slack/Telegram round-trips.
-                from tourniquet.alerts.notifier import maybe_fire_threshold_alert
                 # Spend-after-this-request reflects the reconciled total.
                 spend_after = (
                     spent_cents_with_reservation - reserved_cents + actual_cost
@@ -399,7 +425,6 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     # Threshold-alert wiring (streaming path) — same idempotency
                     # guarantees as the non-streaming path. Sees the spend
                     # *after* this stream's contribution.
-                    from tourniquet.alerts.notifier import maybe_fire_threshold_alert
                     spend_after = (
                         spent_cents_with_reservation - reserved_cents + actual_cost
                     )
@@ -413,8 +438,18 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     )
                     await write_session.commit()
 
+        # W1 follow-up: surface CAP_HIT_HEADER on streaming responses too. For
+        # streams the cap may fire mid-flight (after headers have flushed), so
+        # the value is "0" at send-time — clients still get the synthetic
+        # `tourniquet_cap_hit` SSE block when the cap actually trips. The
+        # header presence advertises capability so non-streaming and streaming
+        # clients have a uniform integration surface.
         return StreamingResponse(
             _generate(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                CAP_HIT_HEADER: "0",
+            },
         )

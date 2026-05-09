@@ -290,3 +290,167 @@ async def test_proxy_auth_rejects_unknown_token():
     assert elapsed < 0.05, (
         f"unknown-token rejection took {elapsed * 1000:.1f}ms — should be <50ms"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# M4 + M5: request-body ceiling and idempotency-key forwarding.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_proxy_rejects_oversized_body(client, monkeypatch):
+    """M4: a body larger than `settings.max_request_body_bytes` is refused with
+    413 Payload Too Large *before* any DB lookup runs. The body-size check
+    fires inside the streamed read, so a malicious 1GB POST never gets buffered
+    fully into memory.
+    """
+    # Tighten the ceiling so the test stays fast (1 KiB instead of 10 MiB).
+    import tourniquet.config as cfg
+    monkeypatch.setattr(cfg.settings, "max_request_body_bytes", 1024)
+
+    # Body just over the configured ceiling.
+    payload = b"x" * 2048
+    resp = client.post(
+        "/v1/messages",
+        content=payload,
+        headers={
+            "authorization": "Bearer tq_does_not_matter",  # body check fires first
+            "content-type": "application/json",
+        },
+    )
+    assert resp.status_code == 413, resp.text
+    assert "exceeds" in resp.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_proxy_forwards_idempotency_key(monkeypatch):
+    """M5: the proxy forwards the `idempotency-key` header upstream. Anthropic
+    treats this header as a retry-safety token; stripping it makes client
+    retries double-bill. The whitelist is the single source of truth in
+    `providers/anthropic.py:FORWARD_HEADERS` — this test pins the contract.
+    """
+    import os
+    import tempfile
+    from contextlib import asynccontextmanager
+
+    from cryptography.fernet import Fernet
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from tourniquet.config import settings as app_settings
+    from tourniquet.models import ApiKey, Base
+
+    # ── Spin up a file-backed SQLite for cross-session ACID ────────────────
+    fd, path = tempfile.mkstemp(prefix="tq_idempotency_", suffix=".db")
+    os.close(fd)
+    url = f"sqlite+aiosqlite:///{path}"
+    engine = create_async_engine(url, future=True)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+        # ── Seed an ApiKey + matching User ─────────────────────────────────
+        token = "tq_idempotency_test_token"
+        sha = hashlib.sha256(token.encode()).hexdigest()
+        f = Fernet(app_settings.fernet_key.encode())
+        enc_anthropic = f.encrypt(b"sk-ant-test-fixture").decode()
+
+        user_id = uuid.uuid4()
+        key_id = uuid.uuid4()
+        async with session_factory() as s:
+            await s.execute(
+                text(
+                    "INSERT INTO users (id, email, created_at) "
+                    "VALUES (:id, :email, CURRENT_TIMESTAMP)"
+                ),
+                {"id": str(user_id), "email": f"u-{user_id}@example.com"},
+            )
+            s.add(
+                ApiKey(
+                    id=key_id,
+                    user_id=user_id,
+                    name="idempotency-test",
+                    tq_token_hash="$2b$12$placeholder",
+                    tq_token_sha256=sha,
+                    anthropic_key_encrypted=enc_anthropic,
+                    profile="standard",
+                    daily_cap_usd_cents=10_000,  # plenty of room
+                    kill_enabled=True,
+                    absolute_ceiling_usd_cents=10_000,
+                )
+            )
+            await s.commit()
+
+        # ── Patch get_session in the router to point at our test engine ───
+        @asynccontextmanager
+        async def _get_session():
+            async with session_factory() as sess:
+                yield sess
+
+        import tourniquet.proxy.router as router_mod
+        monkeypatch.setattr(router_mod, "get_session", _get_session)
+
+        # ── Capture the upstream request via respx ─────────────────────────
+        captured: dict[str, str] = {}
+
+        def _record(req: httpx.Request) -> httpx.Response:
+            for hk, hv in req.headers.items():
+                captured[hk.lower()] = hv
+            return httpx.Response(
+                200,
+                content=json.dumps({
+                    "id": "msg_idem",
+                    "model": "claude-haiku-4-5-20251001",
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                    "content": [],
+                    "role": "assistant",
+                    "stop_reason": "end_turn",
+                    "type": "message",
+                }),
+                headers={"content-type": "application/json"},
+            )
+
+        request_body = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 16,
+            "messages": [{"role": "user", "content": "hi"}],
+        }).encode()
+
+        from tourniquet.main import app
+
+        with respx.mock(assert_all_called=False) as rsx:
+            rsx.post("https://api.anthropic.com/v1/messages").mock(side_effect=_record)
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver", timeout=10.0
+            ) as ac:
+                resp = await ac.post(
+                    "/v1/messages",
+                    content=request_body,
+                    headers={
+                        "authorization": f"Bearer {token}",
+                        "content-type": "application/json",
+                        "idempotency-key": "11111111-2222-3333-4444-555555555555",
+                        # SDK fingerprint headers — also on the whitelist.
+                        "x-stainless-lang": "python",
+                        # A header that must NOT be forwarded.
+                        "user-agent": "secret-leak-canary/1.0",
+                    },
+                )
+
+        assert resp.status_code == 200, resp.text
+        # The forwarded set must include idempotency-key and the stainless one.
+        assert captured.get("idempotency-key") == "11111111-2222-3333-4444-555555555555", (
+            f"idempotency-key not forwarded; upstream saw: {sorted(captured.keys())}"
+        )
+        assert captured.get("x-stainless-lang") == "python", (
+            f"x-stainless-lang not forwarded; upstream saw: {sorted(captured.keys())}"
+        )
+        # The whitelist is exclusive — non-listed headers (user-agent) are dropped.
+        assert "secret-leak-canary" not in captured.get("user-agent", "")
+    finally:
+        await engine.dispose()
+        try:
+            os.unlink(path)
+        except OSError:
+            pass

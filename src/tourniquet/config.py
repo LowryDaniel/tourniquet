@@ -62,6 +62,14 @@ class Settings(BaseSettings):
 
     anthropic_base_url: str = "https://api.anthropic.com"
 
+    # ── Proxy request hardening ───────────────────────────────────────────────
+    # Hard ceiling on POST /v1/messages bodies. Reading unbounded bytes into
+    # memory from `await request.body()` is reachable on Tailscale / cloud-VM
+    # deployments; a 1GB malicious payload would OOM the process. 10 MiB is
+    # generous for legitimate prompts (Anthropic's own request-size guidance
+    # caps inputs well below this) while giving a deterministic ceiling.
+    max_request_body_bytes: int = 10_485_760  # 10 MiB
+
     magic_link_expiry_seconds: int = 900  # 15 minutes
 
     display_currency: str = "USD"  # env var: DISPLAY_CURRENCY
