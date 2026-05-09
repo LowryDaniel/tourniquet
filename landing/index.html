@@ -644,9 +644,13 @@ console.log(resp.content[0].text);</pre>
       partial chunk, then cleanly closes the response:
     </p>
 
-    <div class="sse-block" role="figure" aria-label="Synthetic SSE stop event injected by Tourniquet">
-<span class="sse-event">event: </span><span class="sse-val">message_stop</span>
-<span class="sse-event">data: </span><span class="t-comment">{</span><span class="sse-key">"type"</span><span class="t-comment">:</span><span class="sse-val">"message_stop"</span><span class="t-comment">,</span><span class="sse-key">"stop_reason"</span><span class="t-comment">:</span><span class="sse-stop">"tourniquet_cap_hit"</span><span class="t-comment">}</span>
+    <div class="install-block" role="figure" aria-label="Synthetic SSE stop event injected by Tourniquet">
+      <div class="install-header">
+        <span class="install-label">Server-sent event</span>
+        <button class="copy-btn" data-copy-target="sse-snippet">Copy</button>
+      </div>
+      <div class="install-code sse-block" id="sse-snippet"><span class="sse-event">event: </span><span class="sse-val">message_stop</span>
+<span class="sse-event">data: </span><span class="t-comment">{</span><span class="sse-key">"type"</span><span class="t-comment">:</span><span class="sse-val">"message_stop"</span><span class="t-comment">,</span><span class="sse-key">"stop_reason"</span><span class="t-comment">:</span><span class="sse-stop">"tourniquet_cap_hit"</span><span class="t-comment">}</span></div>
     </div>
 
     <p class="body-muted">
