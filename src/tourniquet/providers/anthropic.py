@@ -60,6 +60,31 @@ class UsageAccumulator:
 CAP_HIT_HEADER = "X-Tourniquet-Cap-Hit"
 
 
+# ── Forwarded-header whitelist (single source of truth) ───────────────────────
+# The proxy router and this provider both forward a small set of inbound headers
+# upstream. Keeping the list here (and re-exporting from router) avoids the
+# previous bug where two copies drifted — `idempotency-key` was missing in both.
+#
+# Membership:
+#   - content-type / anthropic-version / anthropic-beta — Anthropic protocol.
+#   - idempotency-key — Anthropic-supported retry-safety token. Stripping it
+#     causes double-bills on client retries.
+#   - x-stainless-* — SDK fingerprint headers Anthropic uses for support
+#     debugging; harmless to forward and useful when triaging client issues.
+FORWARD_HEADERS = frozenset({
+    "content-type",
+    "anthropic-version",
+    "anthropic-beta",
+    "idempotency-key",
+    "x-stainless-arch",
+    "x-stainless-lang",
+    "x-stainless-os",
+    "x-stainless-package-version",
+    "x-stainless-runtime",
+    "x-stainless-runtime-version",
+})
+
+
 def build_cap_hit_event(
     *,
     cap_usd_cents: int = 0,
@@ -108,8 +133,7 @@ async def stream_request(
     acc = UsageAccumulator()
 
     forward_headers = {
-        k: v for k, v in headers.items()
-        if k.lower() in ("content-type", "anthropic-version", "anthropic-beta")
+        k: v for k, v in headers.items() if k.lower() in FORWARD_HEADERS
     }
     forward_headers["x-api-key"] = anthropic_key
     forward_headers.setdefault("anthropic-version", "2023-06-01")
