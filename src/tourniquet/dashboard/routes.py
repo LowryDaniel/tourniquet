@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import logging
 import math
+import platform
 import secrets
+import subprocess
 import uuid
 
 log = logging.getLogger(__name__)
@@ -260,9 +262,6 @@ def _sleep_protection_status() -> dict[str, Any]:
       active:   True if something is keeping the system awake
       owner:    short label describing the wake-lock holder, when known
     """
-    import platform
-    import subprocess
-
     sysname = platform.system().lower()
     if sysname == "darwin":
         try:
@@ -280,8 +279,11 @@ def _sleep_protection_status() -> dict[str, Any]:
             stripped = line.strip()
             if "PreventUserIdleSystemSleep" in stripped and stripped.endswith(" 1"):
                 active = True
-            elif active and "named:" in stripped.lower():
-                # The line right after a positive assertion lists who holds it.
+            elif active and "named:" in stripped.lower() and "PreventUserIdleSystemSleep" in stripped:
+                # The per-process line that actually holds the assertion we
+                # flagged active. Match the assertion type to avoid attributing
+                # an unrelated assertion (e.g. NoIdleSleepAssertion from a
+                # video-call camera capture) to the wrong process.
                 # Format: "   pid 12345(caffeinate): named: \"...\""
                 if "caffeinate" in stripped.lower():
                     owner = "caffeinate"
@@ -290,9 +292,38 @@ def _sleep_protection_status() -> dict[str, Any]:
                 break
         return {"platform": "darwin", "active": active, "owner": owner}
 
-    if sysname in ("linux",):
-        # Servers/Pis/containers don't auto-sleep; treat as always-on by default.
-        return {"platform": "linux", "active": True, "owner": "no idle-sleep on this OS"}
+    if sysname == "linux":
+        # Best-effort detect via systemd-inhibit. Honest "unknown" beats
+        # the previous "always-on by default" lie, which was wrong for
+        # any Linux laptop on battery with the default suspend policy.
+        try:
+            result = subprocess.run(
+                ["systemd-inhibit", "--list", "--no-pager"],
+                capture_output=True, text=True, timeout=2, check=False,
+            )
+            stdout_lower = result.stdout.lower()
+            if "tourniquet" in stdout_lower or "idle:sleep" in stdout_lower:
+                return {"platform": "linux", "active": True, "owner": "systemd-inhibit"}
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+        return {"platform": "linux", "active": False, "owner": ""}
+
+    if sysname == "windows":
+        # Best-effort detect via powercfg /requests. Admin-only on some
+        # installs; tolerate failure with an honest "unknown" rather than
+        # the previous "always-on by default" lie.
+        try:
+            result = subprocess.run(
+                ["powercfg", "/requests"],
+                capture_output=True, text=True, timeout=2, check=False,
+            )
+            if "SYSTEM:" in result.stdout:
+                tail = result.stdout.split("SYSTEM:", 1)[1].splitlines()
+                if len(tail) > 1 and "None." not in tail[1]:
+                    return {"platform": "windows", "active": True, "owner": "system-execution-state"}
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+        return {"platform": "windows", "active": False, "owner": ""}
 
     return {"platform": sysname or "other", "active": False, "owner": ""}
 
@@ -563,6 +594,15 @@ async def update_cap(
 
     async with get_session() as session:
         key = await _get_key_or_404(key_id, session)
+        if cents > key.absolute_ceiling_usd_cents:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Cap ({format_money(cents, currency)}) cannot exceed absolute ceiling "
+                    f"({format_money(key.absolute_ceiling_usd_cents, currency)}). "
+                    "Raise the ceiling first."
+                ),
+            )
         key.daily_cap_usd_cents = cents
         await session.commit()
         today = date.today()
@@ -1067,7 +1107,6 @@ async def apply_suggestion_direct(
 async def new_key_form(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "key_new.html", {
         "profiles": list(PROFILES.keys()),
-        "profiles_obj": PROFILES,
         "profiles_obj": PROFILES,
         "currency": settings.display_currency,
     })

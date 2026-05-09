@@ -253,6 +253,32 @@ def test_update_cap_sets_cents(client):
     assert resp.status_code == 200
 
 
+def test_update_cap_rejects_above_ceiling(client):
+    """POST /dashboard/key/<id>/cap with cap > absolute_ceiling returns 422.
+
+    The invariant `daily_cap <= absolute_ceiling` is enforced on the ceiling
+    edit path; this guards the symmetric cap edit path so a manual edit can't
+    silently violate it (auto-tune already clamps).
+    """
+    key = _make_key(daily_cap=500, absolute_ceiling=1000)
+    cm = _make_session_cm([key], get_key=key)
+
+    with (
+        patch("tourniquet.dashboard.routes.get_session", cm),
+        patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=0)),
+    ):
+        # ceiling is $10.00 (1000 cents). Submit $10.01 (1001 cents) — should reject.
+        resp = client.post(
+            f"/dashboard/key/{key.id}/cap",
+            data={"daily_cap": "10.01"},
+        )
+
+    assert resp.status_code == 422
+    body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+    detail = body.get("detail", "") if isinstance(body, dict) else body
+    assert "ceiling" in detail.lower()
+
+
 # ── POST /dashboard/key/<id>/lift ──────────────────────────────────────────────
 
 def test_lift_multiplier(client):

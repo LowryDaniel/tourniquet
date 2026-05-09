@@ -1,0 +1,11 @@
+<details id="always-on-guide-linux" class="glass-panel always-on-panel">
+  <summary>Keep Tourniquet running while this Linux box sleeps</summary>
+  <div class="always-on-body">
+    <p>By default many desktop Linux distros suspend after a period of inactivity (especially laptops on battery). Wrap the proxy in <code>systemd-inhibit</code> so the OS keeps it awake while it's running:</p>
+    <div class="copy-block">
+      <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+      <pre><code>systemd-inhibit --what=idle:sleep --who=tourniquet --why="cap enforcement" tourniquet start</code></pre>
+    </div>
+    <p>Stop the proxy with <code>Ctrl+C</code> and the inhibit lock is released automatically. For a headless server / Pi / VM you usually don't need this — see the <a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/deploy.md" target="_blank" rel="noopener noreferrer">24/7 deployment guide</a> for systemd unit examples.</p>
+  </div>
+</details>

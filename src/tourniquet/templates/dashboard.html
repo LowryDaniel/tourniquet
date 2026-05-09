@@ -72,8 +72,12 @@
             </span>
           {% elif sleep_protection.platform == 'darwin' %}
             <button type="button" class="btn-small" onclick="document.getElementById('always-on-guide').open = true; document.getElementById('always-on-guide').scrollIntoView({behavior:'smooth',block:'start'})">Show how</button>
+          {% elif sleep_protection.platform == 'linux' %}
+            <button type="button" class="btn-small" onclick="document.getElementById('always-on-guide-linux').open = true; document.getElementById('always-on-guide-linux').scrollIntoView({behavior:'smooth',block:'start'})">Show how (systemd-inhibit)</button>
+          {% elif sleep_protection.platform == 'windows' %}
+            <button type="button" class="btn-small" onclick="document.getElementById('always-on-guide-windows').open = true; document.getElementById('always-on-guide-windows').scrollIntoView({behavior:'smooth',block:'start'})">Show how (PowerShell)</button>
           {% else %}
-            <span class="channel-tier muted">— always-on by default on this OS</span>
+            <span class="channel-tier muted">— detection unavailable on this OS</span>
           {% endif %}
         </li>
       </ul>
@@ -92,6 +96,14 @@
         <p>The screen can still dim — only sleep is blocked. Stop the proxy with <code>Ctrl+C</code> in that terminal, or <code>pkill caffeinate</code> from another. To keep going without a laptop awake at all, see the <a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/deploy.md" target="_blank" rel="noopener noreferrer">24/7 deployment guide</a> for Pi / Proxmox / Docker / cloud VM.</p>
       </div>
     </details>
+    {% endif %}
+
+    {% if sleep_protection.platform == 'linux' and not sleep_protection.active %}
+      {% include "_partials/always_on_guide_linux.html" %}
+    {% endif %}
+
+    {% if sleep_protection.platform == 'windows' and not sleep_protection.active %}
+      {% include "_partials/always_on_guide_windows.html" %}
     {% endif %}
 
     {# ── Setup guides — collapsed by default ── #}
