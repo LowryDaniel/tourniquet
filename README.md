@@ -100,21 +100,25 @@ client = anthropic.Anthropic(
 
 Most proxies enforce caps by dropping the TCP connection when the budget is exceeded. Your agent sees a network error, throws an exception, and either crashes or retries — which may spend more.
 
-Tourniquet injects a synthetic SSE event into the in-flight stream:
+Tourniquet injects two synthetic SSE blocks into the in-flight stream:
 
-```json
-{
-  "type": "message_stop",
-  "stop_reason": "tourniquet_cap_hit",
-  "tourniquet": {
-    "daily_cap_usd": 10.00,
-    "spend_usd": 10.03,
-    "resets_at": "2026-05-08T00:00:00Z"
-  }
-}
+```
+event: message_stop
+data: {"type":"message_stop","stop_reason":"end_turn"}
+
+event: error
+data: {"type":"error","error":{"type":"tourniquet_cap_hit","message":"Daily spend cap reached. Resets at midnight UTC.","cap_usd_cents":1000,"spent_usd_cents":1003,"resets_at":"2026-05-08T00:00:00Z"}}
 ```
 
-The Anthropic SDK treats this as a normal `message_stop`. Your agent loop finishes cleanly. Subsequent requests in the same day return `402 Payment Required` with the same metadata. The cap resets at midnight UTC.
+The Anthropic SDK treats the first block as a normal `message_stop` with the
+documented `end_turn` stop-reason — so strict Pydantic / Zod validators accept
+it and your agent loop finishes cleanly. The second `event: error` block
+carries the cap-hit metadata for clients that want to distinguish a cap hit
+from a natural end-of-turn. Non-streaming or non-SSE-aware clients can also
+look for the `X-Tourniquet-Cap-Hit: 1` HTTP response header.
+
+Subsequent requests in the same day return `402 Payment Required` with the
+same metadata. The cap resets at midnight UTC.
 
 No other proxy does this. They cut the wire. Tourniquet closes the valve.
 
