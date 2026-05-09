@@ -1,0 +1,12 @@
+<details id="always-on-guide-windows" class="glass-panel always-on-panel">
+  <summary>Keep Tourniquet running while this PC sleeps</summary>
+  <div class="always-on-body">
+    <p>Windows suspends idle machines by default, which freezes Tourniquet's cap enforcement. Launch the proxy from PowerShell with a system-execution-state request so Windows keeps it awake:</p>
+    <div class="copy-block">
+      <button type="button" class="copy-btn" aria-label="Copy">Copy</button>
+      <pre><code>powercfg /requestsoverride PROCESS tourniquet.exe SYSTEM
+tourniquet start</code></pre>
+    </div>
+    <p>To revoke the override later, run <code>powercfg /requestsoverride PROCESS tourniquet.exe</code> with no flags. Verify what's keeping the system awake any time with <code>powercfg /requests</code>. For a 24/7 setup, see the <a href="https://github.com/LowryDaniel/tourniquet/blob/main/docs/deploy.md" target="_blank" rel="noopener noreferrer">deployment guide</a> — running as a Windows service avoids the sleep problem entirely.</p>
+  </div>
+</details>
