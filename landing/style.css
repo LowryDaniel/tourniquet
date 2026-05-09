@@ -733,7 +733,12 @@ h3 { font-size: 1rem; font-weight: 700; }
   text-underline-offset: 3px;
 }
 .always-on-hint-body a:hover { text-decoration-color: var(--accent); }
-.always-on-hint-content { min-width: 0; }
+.always-on-hint-content {
+  /* min-width:0 lets the grid 1fr column shrink below its content's intrinsic
+     size, which is what allows overflow-x:auto on the inner code blocks to
+     actually engage instead of pushing the parent wider. */
+  min-width: 0;
+}
 
 /* Per-OS command stack inside the always-on hint. Each install-block is the
    same component used in the Install section, so visual + copy-button
@@ -743,13 +748,17 @@ h3 { font-size: 1rem; font-weight: 700; }
   flex-direction: column;
   gap: 0.4rem;
   margin-top: 1rem;
+  min-width: 0;
 }
 .always-on-os .install-block {
   margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 .always-on-os .install-code {
   font-size: 0.82rem;
   padding: 0.85rem 1rem;
+  min-width: 0;
 }
 .always-on-os .os-stop {
   font-size: 0.82rem;

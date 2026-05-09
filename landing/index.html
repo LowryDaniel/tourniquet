@@ -400,7 +400,8 @@
               <span class="install-label">Windows (PowerShell)</span>
               <button class="copy-btn" data-copy-target="caf-win">Copy</button>
             </div>
-<div class="install-code" id="caf-win">$ES = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);' -Name 'ES' -Namespace 'Win32' -PassThru
+<div class="install-code" id="caf-win">$sig = '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
+$ES = Add-Type -MemberDefinition $sig -Name 'ES' -Namespace 'Win32' -PassThru
 $null = $ES::SetThreadExecutionState(2147483649)
 tourniquet start</div>
           </div>
