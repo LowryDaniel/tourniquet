@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +35,22 @@ class Settings(BaseSettings):
     database_url: str
     fernet_key: str
     secret_key: str
+
+    @field_validator("fernet_key")
+    @classmethod
+    def _validate_fernet(cls, v: str) -> str:
+        try:
+            Fernet(v.encode())
+        except Exception as e:
+            raise ValueError(f"FERNET_KEY invalid (must be 32 url-safe base64 bytes): {e}") from e
+        return v
+
+    @field_validator("secret_key")
+    @classmethod
+    def _validate_secret(cls, v: str) -> str:
+        if len(v.encode()) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 bytes")
+        return v
 
     resend_api_key: str = ""
     resend_from_email: str = "alerts@tourniquet.ai"
