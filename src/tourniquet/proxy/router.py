@@ -11,6 +11,7 @@ POST /v1/messages:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import date, datetime, timezone
 
@@ -65,25 +66,62 @@ def _decrypt_anthropic_key(encrypted: str) -> str:
     return f.decrypt(encrypted.encode()).decode()
 
 
+async def _legacy_bcrypt_scan(raw: str, session: AsyncSession) -> ApiKey | None:
+    """Fallback path for tokens minted before C3 (no `tq_token_sha256`).
+
+    Loads only rows where `tq_token_sha256 IS NULL` and bcrypt-checks each.
+    On match, populates `tq_token_sha256` so subsequent requests hit the
+    SHA-256 fast path. This is a one-shot upgrade per legacy key — once
+    the column is set, future requests never enter this scan.
+
+    Returns None if no legacy row matches (caller raises 401).
+    """
+    result = await session.execute(
+        select(ApiKey).where(ApiKey.tq_token_sha256.is_(None))
+    )
+    legacy_keys = result.scalars().all()
+
+    for key in legacy_keys:
+        if bcrypt.checkpw(raw.encode(), key.tq_token_hash.encode()):
+            # Backfill so the next request short-circuits to the indexed path.
+            key.tq_token_sha256 = hashlib.sha256(raw.encode()).hexdigest()
+            await session.commit()
+            return key
+
+    return None
+
+
 async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
     """Resolve a tq_* bearer token to its ApiKey row.
 
-    Uses bcrypt verify — intentionally slow to prevent brute-force.
+    Fast path: SHA-256(token) → unique-indexed lookup, single SELECT.
+    Slow path: bcrypt scan over rows with NULL `tq_token_sha256` (legacy
+    keys minted before C3). On match, the legacy key is upgraded so it
+    never hits the slow path again.
+
+    `tq_*` tokens are 32 bytes from `secrets.token_urlsafe(32)` (256 bits
+    of entropy) — they are not user passwords, so bcrypt's slowness is
+    unnecessary. SHA-256 + unique index gives O(1) auth.
     """
-    # Strip "Bearer " prefix
     raw = token.removeprefix("Bearer ").strip()
 
-    # We need to find the key whose hash matches — bcrypt doesn't allow direct lookup.
-    # Mitigate timing by limiting to 1000 active keys per query.
-    # In production: cache the token→key_id mapping in Redis (v2).
-    result = await session.execute(select(ApiKey))
-    keys = result.scalars().all()
+    sha = hashlib.sha256(raw.encode()).hexdigest()
+    result = await session.execute(
+        select(ApiKey).where(ApiKey.tq_token_sha256 == sha)
+    )
+    key = result.scalar_one_or_none()
 
-    for key in keys:
-        if bcrypt.checkpw(raw.encode(), key.tq_token_hash.encode()):
-            return key
+    if key is None:
+        # Legacy fallback: tokens minted before C3 have no sha256 column.
+        key = await _legacy_bcrypt_scan(raw, session)
 
-    raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Invalid or unknown Tourniquet token."})
+    if key is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"type": "invalid_token", "message": "Invalid or unknown Tourniquet token."},
+        )
+
+    return key
 
 
 @router.post("/v1/messages", response_model=None)

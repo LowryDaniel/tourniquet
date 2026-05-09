@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import os
 import secrets
 import sys
@@ -181,6 +182,7 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
 
     tq_token = f"tq_{secrets.token_urlsafe(32)}"
     token_hash = bcrypt.hashpw(tq_token.encode(), bcrypt.gensalt()).decode()
+    token_sha256 = hashlib.sha256(tq_token.encode()).hexdigest()
     fernet = Fernet(settings.fernet_key.encode())
     encrypted_key = fernet.encrypt(anthropic_key.encode()).decode()
 
@@ -197,6 +199,8 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
             key = ApiKey(
                 name=name,
                 tq_token_hash=token_hash,
+                # C3: indexed fast-path column.
+                tq_token_sha256=token_sha256,
                 anthropic_key_encrypted=encrypted_key,
                 profile="standard",
                 daily_cap_usd_cents=cap_cents,

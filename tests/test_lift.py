@@ -83,6 +83,8 @@ def _build_fake_db_key(
     absolute_ceiling: int = 2000,
     tq_token: str = "tq_testtoken",
 ) -> MagicMock:
+    import hashlib
+
     import bcrypt
     token_hash = bcrypt.hashpw(tq_token.encode(), bcrypt.gensalt()).decode()
     key = MagicMock()
@@ -93,6 +95,9 @@ def _build_fake_db_key(
     key.lifted_cap_usd_cents = None
     key.lift_expires_at = None
     key.tq_token_hash = token_hash
+    # C3: post-migration keys carry the indexed sha256 column. The admin
+    # auth path prefers it over bcrypt for verification.
+    key.tq_token_sha256 = hashlib.sha256(tq_token.encode()).hexdigest()
     return key
 
 
@@ -114,6 +119,7 @@ def _make_session_cm(fake_key: MagicMock):
         mutable.daily_cap_usd_cents = fake_key.daily_cap_usd_cents
         mutable.absolute_ceiling_usd_cents = fake_key.absolute_ceiling_usd_cents
         mutable.tq_token_hash = fake_key.tq_token_hash
+        mutable.tq_token_sha256 = fake_key.tq_token_sha256
         session.get = AsyncMock(return_value=mutable)
         session.commit = AsyncMock()
         yield session

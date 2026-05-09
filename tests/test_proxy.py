@@ -8,8 +8,14 @@ Three critical scenarios:
 
 # Tests are stubs — implementations added during W1 build.
 
+import hashlib
 import json
+import time
+import uuid
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import bcrypt
 import httpx
 import pytest
 import respx
@@ -152,3 +158,135 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
         assert "cap_usd_cents" in err_payload["error"]
         assert "spent_usd_cents" in err_payload["error"]
         assert "resets_at" in err_payload["error"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C3: SHA-256 indexed token-auth fast path. The proxy used to bcrypt-scan
+# every ApiKey row per request — these tests pin the new behaviour so we
+# can drop the bcrypt fallback in v0.2 without regressing.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_fake_key(token: str, *, with_sha256: bool = True) -> MagicMock:
+    """Mock ApiKey row. Always has bcrypt hash; sha256 column is optional
+    so we can simulate legacy rows that pre-date C3."""
+    key = MagicMock()
+    key.id = uuid.uuid4()
+    key.name = "k"
+    key.tq_token_hash = bcrypt.hashpw(token.encode(), bcrypt.gensalt()).decode()
+    key.tq_token_sha256 = (
+        hashlib.sha256(token.encode()).hexdigest() if with_sha256 else None
+    )
+    return key
+
+
+def _make_query_counting_session(
+    rows_by_predicate: dict[str, list],
+) -> tuple[AsyncMock, list[str]]:
+    """Build an AsyncMock session that records each `execute()` call and
+    returns a result whose `.scalar_one_or_none()` / `.scalars().all()`
+    are wired off whichever bucket the SQL hit.
+
+    `rows_by_predicate` keys: "sha256" for the fast-path SELECT,
+    "is_null" for the legacy bcrypt scan SELECT. Empty list → miss.
+    """
+    queries: list[str] = []
+    session = AsyncMock()
+
+    async def _execute(stmt):
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": False}))
+        # Heuristic: the sha256 fast path filters by tq_token_sha256 = :param;
+        # the legacy scan filters by tq_token_sha256 IS NULL.
+        if "IS NULL" in sql.upper():
+            queries.append("is_null")
+            rows = rows_by_predicate.get("is_null", [])
+        else:
+            queries.append("sha256")
+            rows = rows_by_predicate.get("sha256", [])
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = rows[0] if rows else None
+        scalars = MagicMock()
+        scalars.all.return_value = rows
+        result.scalars.return_value = scalars
+        return result
+
+    session.execute = AsyncMock(side_effect=_execute)
+    session.commit = AsyncMock()
+    return session, queries
+
+
+@pytest.mark.asyncio
+async def test_proxy_auth_uses_sha256_lookup():
+    """C3: a token whose sha256 is already populated resolves with EXACTLY
+    one indexed SELECT — no bcrypt fanout, no second query."""
+    from tourniquet.proxy.router import _resolve_api_key
+
+    token = "tq_fast_path_token"
+    fake_key = _build_fake_key(token, with_sha256=True)
+    session, queries = _make_query_counting_session({"sha256": [fake_key]})
+
+    resolved = await _resolve_api_key(f"Bearer {token}", session)
+
+    assert resolved is fake_key
+    assert queries == ["sha256"], (
+        f"expected one indexed SELECT, got {queries}"
+    )
+    # The fast path must not commit — there's nothing to backfill.
+    session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_legacy_bcrypt_token_still_works():
+    """C3: a token minted before the migration (sha256 column NULL) must
+    still authenticate via bcrypt, AND the sha256 column must be backfilled
+    so the next request hits the fast path."""
+    from tourniquet.proxy.router import _resolve_api_key
+
+    token = "tq_legacy_token"
+    legacy_key = _build_fake_key(token, with_sha256=False)
+    assert legacy_key.tq_token_sha256 is None  # pre-condition
+    session, queries = _make_query_counting_session({
+        "sha256": [],            # fast path misses
+        "is_null": [legacy_key], # legacy scan finds it
+    })
+
+    resolved = await _resolve_api_key(f"Bearer {token}", session)
+
+    assert resolved is legacy_key
+    # Fast path runs first, then the legacy scan — exactly two queries.
+    assert queries == ["sha256", "is_null"], queries
+    # Backfill: the row must now carry the sha256 hex so subsequent
+    # requests short-circuit to the indexed path.
+    expected_sha = hashlib.sha256(token.encode()).hexdigest()
+    assert legacy_key.tq_token_sha256 == expected_sha
+    # And the backfill must have been committed.
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_proxy_auth_rejects_unknown_token():
+    """C3: an unknown bearer token returns 401 fast — the bcrypt scan only
+    runs against legacy rows (tq_token_sha256 IS NULL), so with no legacy
+    rows the rejection is effectively two indexed lookups, not a fanout."""
+    from fastapi import HTTPException
+
+    from tourniquet.proxy.router import _resolve_api_key
+
+    session, queries = _make_query_counting_session({
+        "sha256": [],   # fast path misses
+        "is_null": [],  # no legacy rows to bcrypt-check
+    })
+
+    t0 = time.perf_counter()
+    with pytest.raises(HTTPException) as exc_info:
+        await _resolve_api_key("Bearer tq_does_not_exist", session)
+    elapsed = time.perf_counter() - t0
+
+    assert exc_info.value.status_code == 401
+    # No bcrypt fanout: rejection took two trivial DB lookups.
+    assert queries == ["sha256", "is_null"], queries
+    # Bcrypt at default cost is ~100ms+ per check; with no rows to check,
+    # this whole path should resolve in milliseconds.
+    assert elapsed < 0.05, (
+        f"unknown-token rejection took {elapsed * 1000:.1f}ms — should be <50ms"
+    )
