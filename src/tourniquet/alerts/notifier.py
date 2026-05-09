@@ -28,6 +28,11 @@ from tourniquet.config import settings
 
 log = logging.getLogger(__name__)
 
+# Strong references to background fan_out tasks. asyncio.create_task only
+# returns a weak-referenced task; without holding it here the GC can cancel
+# the dispatch mid-flight. Tasks discard themselves via add_done_callback.
+_pending_tasks: set[asyncio.Task] = set()
+
 
 @dataclasses.dataclass
 class AlertEvent:
@@ -240,7 +245,9 @@ async def maybe_fire_threshold_alert(
             except Exception:
                 log.exception("Background alert fan_out failed for key %s", api_key.id)
 
-        asyncio.create_task(_dispatch())
+        t = asyncio.create_task(_dispatch())
+        _pending_tasks.add(t)
+        t.add_done_callback(_pending_tasks.discard)
         return threshold
     except Exception:
         # Never let an alert-path failure break the proxy. The cap-check has

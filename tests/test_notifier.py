@@ -610,6 +610,62 @@ async def test_maybe_fire_threshold_alert_cap_hit_with_kill_offers_recovery():
 
 
 @pytest.mark.asyncio
+async def test_fan_out_task_is_referenced():
+    """Regression: fan_out background task must be strongly referenced.
+
+    asyncio.create_task only returns a weak ref via the event loop, so a
+    dropped reference can be GC'd mid-flight. We hold each task in
+    _pending_tasks and discard via add_done_callback. This test verifies
+    the task is registered immediately, then removed once it completes.
+    """
+    from datetime import date as _date
+    from unittest.mock import AsyncMock, MagicMock
+    from tourniquet.alerts.notifier import (
+        _pending_tasks,
+        maybe_fire_threshold_alert,
+    )
+
+    # Start from a clean slate — earlier tests may have left tasks behind.
+    _pending_tasks.clear()
+
+    api_key = MagicMock()
+    api_key.id = "00000000-0000-0000-0000-000000000099"
+    api_key.name = "test-key"
+    api_key.alert_email = None
+
+    session = MagicMock()
+    session.add = MagicMock()
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none = MagicMock(return_value=None)
+    session.execute = AsyncMock(return_value=fake_result)
+
+    with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
+        threshold = await maybe_fire_threshold_alert(
+            api_key,
+            spent_cents=400,  # 80% of 500
+            cap_cents=500,
+            today=_date(2026, 5, 8),
+            kill_enabled=True,
+            session=session,
+        )
+
+        # Immediately after maybe_fire_threshold_alert returns, the task has
+        # been created and registered but has not yet been awaited / run.
+        assert threshold == 80
+        assert len(_pending_tasks) == 1, (
+            "fan_out task must be held in _pending_tasks to prevent GC cancellation"
+        )
+        task = next(iter(_pending_tasks))
+
+        # Now let the event loop run the background dispatch to completion.
+        await task
+
+    # done_callback must have discarded it from the registry.
+    assert len(_pending_tasks) == 0
+    assert mock_fanout.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_maybe_fire_threshold_alert_monitor_mode_no_recovery():
     """In monitor mode (kill_enabled=False), cap-hit alert fires but
     recovery_offer must stay False — the key isn't actually blocked."""
