@@ -25,9 +25,9 @@ from tourniquet.config import settings
 
 
 def _notifications_enabled() -> bool:
-    return (
-        settings.enable_mac_notifications == "true"
-        or getattr(settings, "enable_desktop_notifications", "") == "true"
+    return bool(
+        settings.enable_mac_notifications
+        or getattr(settings, "enable_desktop_notifications", False)
     )
 
 

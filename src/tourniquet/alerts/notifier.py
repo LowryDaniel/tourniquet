@@ -316,9 +316,9 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     coroutines.append(_run("jsonl", write_jsonl(event, message)))
 
     # Desktop notification (mac / windows / linux)
-    desktop_enabled = (
-        settings.enable_mac_notifications == "true"
-        or getattr(settings, "enable_desktop_notifications", "") == "true"
+    desktop_enabled = bool(
+        settings.enable_mac_notifications
+        or getattr(settings, "enable_desktop_notifications", False)
     )
     if desktop_enabled:
         coroutines.append(_run("desktop", send_desktop_notification("Tourniquet", message, event)))

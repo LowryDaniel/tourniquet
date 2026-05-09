@@ -33,7 +33,7 @@ async def send_mac_notification(title: str, message: str, event: object | None =
     """
     if not sys.platform == "darwin":
         return
-    if settings.enable_mac_notifications != "true":
+    if not settings.enable_mac_notifications:
         return
 
     style = getattr(settings, "mac_notification_style", "both")

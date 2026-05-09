@@ -392,8 +392,8 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
 
     # Force-enable desktop for this test only (overrides .env without touching it)
     if args.enable_desktop:
-        settings.enable_desktop_notifications = "true"
-        settings.enable_mac_notifications = "true"
+        settings.enable_desktop_notifications = True
+        settings.enable_mac_notifications = True
 
     threshold_map = {"50": 50, "80": 80, "100": 100, "cap-hit": -1}
     threshold = threshold_map.get(args.threshold, 80)

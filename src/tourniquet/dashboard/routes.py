@@ -236,9 +236,9 @@ def _alert_channel_status() -> dict[str, dict[str, Any]]:
         and getattr(settings, "resend_from_email", "")
     )
     webhook_configured = bool(getattr(settings, "alert_webhook_url", ""))
-    desktop_configured = (
-        str(getattr(settings, "enable_mac_notifications", "")).lower() == "true"
-        or str(getattr(settings, "enable_desktop_notifications", "")).lower() == "true"
+    desktop_configured = bool(
+        getattr(settings, "enable_mac_notifications", False)
+        or getattr(settings, "enable_desktop_notifications", False)
     )
 
     return {
