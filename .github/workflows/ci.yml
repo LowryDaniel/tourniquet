@@ -36,6 +36,11 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,postgres]"
 
+      - name: Generate ephemeral test keys
+        run: |
+          echo "FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> $GITHUB_ENV
+
       - name: Lint
         run: ruff check . && ruff format --check .
 
@@ -45,15 +50,11 @@ jobs:
       - name: Run migrations
         env:
           DATABASE_URL: postgresql+psycopg://tourniquet:test@localhost:5432/tourniquet_test
-          FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
-          SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
         run: alembic upgrade head
 
       - name: Tests
         env:
           DATABASE_URL: postgresql+psycopg://tourniquet:test@localhost:5432/tourniquet_test
-          FERNET_KEY: ${{ secrets.CI_FERNET_KEY }}
-          SECRET_KEY: ${{ secrets.CI_SECRET_KEY }}
         run: pytest --cov=tourniquet --cov-report=term-missing
 
   deploy:
