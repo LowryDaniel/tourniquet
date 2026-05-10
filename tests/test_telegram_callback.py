@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client():
     from tourniquet.main import app
+
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -36,11 +37,12 @@ def test_telegram_callback_valid_lift(client):
     """Valid lift|<key>|2x callback dispatches to _apply_lift_from_callback."""
     key_id = str(uuid.uuid4())
 
-    with patch(
-        "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
-        new_callable=AsyncMock,
-    ) as mock_lift, patch(
-        "tourniquet.config.settings.telegram_webhook_secret", ""
+    with (
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_lift,
+        patch("tourniquet.config.settings.telegram_webhook_secret", ""),
     ):
         resp = client.post(
             "/telegram/callback",
@@ -56,11 +58,12 @@ def test_telegram_callback_ceiling_mode(client):
     """lift|<key>|ceiling mode is passed through correctly."""
     key_id = str(uuid.uuid4())
 
-    with patch(
-        "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
-        new_callable=AsyncMock,
-    ) as mock_lift, patch(
-        "tourniquet.config.settings.telegram_webhook_secret", ""
+    with (
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_lift,
+        patch("tourniquet.config.settings.telegram_webhook_secret", ""),
     ):
         resp = client.post(
             "/telegram/callback",
@@ -75,11 +78,12 @@ def test_telegram_callback_ignore_mode(client):
     """lift|<key>|ignore is passed to _apply_lift_from_callback (which no-ops)."""
     key_id = str(uuid.uuid4())
 
-    with patch(
-        "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
-        new_callable=AsyncMock,
-    ) as mock_lift, patch(
-        "tourniquet.config.settings.telegram_webhook_secret", ""
+    with (
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_lift,
+        patch("tourniquet.config.settings.telegram_webhook_secret", ""),
     ):
         resp = client.post(
             "/telegram/callback",
@@ -120,9 +124,12 @@ def test_telegram_callback_correct_secret(client):
     """Correct secret header passes authentication."""
     key_id = str(uuid.uuid4())
 
-    with patch("tourniquet.alerts.telegram_callbacks.settings") as mock_settings, patch(
-        "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
-        new_callable=AsyncMock,
+    with (
+        patch("tourniquet.alerts.telegram_callbacks.settings") as mock_settings,
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
+            new_callable=AsyncMock,
+        ),
     ):
         mock_settings.telegram_webhook_secret = "my-secret"
         resp = client.post(
@@ -136,11 +143,12 @@ def test_telegram_callback_correct_secret(client):
 
 def test_telegram_callback_non_lift_data(client):
     """Non-lift callback_data is silently ignored (other bots/handlers)."""
-    with patch(
-        "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
-        new_callable=AsyncMock,
-    ) as mock_lift, patch(
-        "tourniquet.config.settings.telegram_webhook_secret", ""
+    with (
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_lift,
+        patch("tourniquet.config.settings.telegram_webhook_secret", ""),
     ):
         resp = client.post(
             "/telegram/callback",

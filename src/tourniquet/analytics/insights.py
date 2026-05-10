@@ -30,8 +30,8 @@ class BreakdownRow(NamedTuple):
 
 
 class HourBucket(NamedTuple):
-    weekday: int        # 0=Mon … 6=Sun
-    hour: int           # 0–23
+    weekday: int  # 0=Mon … 6=Sun
+    hour: int  # 0–23
     cost_cents: int
     z_score: float
 
@@ -43,7 +43,7 @@ class InsightReport:
     total_usd_cents: int
     request_count: int
     by_model: list[BreakdownRow]
-    by_caller: list[BreakdownRow]            # grouped by user_agent
+    by_caller: list[BreakdownRow]  # grouped by user_agent
     by_metadata_user_id: list[BreakdownRow]  # grouped by metadata.user_id
     hottest_hour: HourBucket | None
     biggest_request: UsageEvent | None
@@ -236,9 +236,7 @@ async def compute_insights(
     hottest_hour: HourBucket | None = None
     if hour_rows:
         # Build baseline map: (dow_sun, hr) → cost
-        baseline_map: dict[tuple[int, int], int] = {
-            (r[0], r[1]): int(r[2]) for r in baseline_rows
-        }
+        baseline_map: dict[tuple[int, int], int] = {(r[0], r[1]): int(r[2]) for r in baseline_rows}
 
         # Compute mean/std of baseline costs for z-score
         baseline_costs = list(baseline_map.values())
@@ -324,9 +322,7 @@ async def compute_insights(
             ((hottest_hour.weekday + 1) % 7, hottest_hour.hour), 0
         )
         multiplier = (
-            round(hottest_hour.cost_cents / baseline_for_bucket)
-            if baseline_for_bucket
-            else "∞"
+            round(hottest_hour.cost_cents / baseline_for_bucket) if baseline_for_bucket else "∞"
         )
         suggestions.append(
             f"On {wday} {hottest_hour.hour:02d}:00 you spent {fmtcost} — "

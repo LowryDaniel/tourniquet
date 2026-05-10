@@ -45,39 +45,46 @@ def _build_action_payload(
     elements: list[dict[str, Any]] = []
     if recovery_offer:
         from tourniquet.alerts.notifier import recovery_amounts_cents
+
         amounts = recovery_amounts_cents(getattr(event, "cap_usd_cents", 0) or 0)
         for c in amounts:
             label = f"+${c // 100}" if c % 100 == 0 else f"+${c / 100:.2f}"
-            elements.append({
-                "type": "button",
-                "action_id": f"lift_by_amount_{c}",
-                "text": {"type": "plain_text", "text": label},
-                "value": f"{key_id}|{c}",
-                "style": "primary",
-            })
+            elements.append(
+                {
+                    "type": "button",
+                    "action_id": f"lift_by_amount_{c}",
+                    "text": {"type": "plain_text", "text": label},
+                    "value": f"{key_id}|{c}",
+                    "style": "primary",
+                }
+            )
     else:
-        elements.extend([
-            {
-                "type": "button",
-                "action_id": "lift_2x",
-                "text": {"type": "plain_text", "text": "💸 Lift 2× today"},
-                "value": f"{key_id}|2x",
-            },
-            {
-                "type": "button",
-                "action_id": "lift_ceiling",
-                "text": {"type": "plain_text", "text": "🚀 To ceiling"},
-                "value": f"{key_id}|ceiling",
-            },
-        ])
+        elements.extend(
+            [
+                {
+                    "type": "button",
+                    "action_id": "lift_2x",
+                    "text": {"type": "plain_text", "text": "💸 Lift 2× today"},
+                    "value": f"{key_id}|2x",
+                },
+                {
+                    "type": "button",
+                    "action_id": "lift_ceiling",
+                    "text": {"type": "plain_text", "text": "🚀 To ceiling"},
+                    "value": f"{key_id}|ceiling",
+                },
+            ]
+        )
         if kill_now_url:
-            elements.append({
-                "type": "button",
-                "action_id": "kill_now",
-                "text": {"type": "plain_text", "text": "🛑 Kill now"},
-                "value": key_id,
-                "style": "danger",
-            })
+            elements.append(
+                {
+                    "type": "button",
+                    "action_id": "kill_now",
+                    "text": {"type": "plain_text", "text": "🛑 Kill now"},
+                    "value": key_id,
+                    "style": "danger",
+                }
+            )
 
     return {
         "blocks": [
@@ -152,6 +159,7 @@ async def send_slack(message: str, event: object = None) -> None:
     if recovery_offer and event is not None:
         from tourniquet.alerts.notifier import recovery_amounts_cents
         from tourniquet.routes.admin import build_lift_by_amount_url
+
         amounts = recovery_amounts_cents(getattr(event, "cap_usd_cents", 0) or 0)
         link_parts = []
         for c in amounts:

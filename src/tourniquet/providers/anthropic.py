@@ -47,25 +47,17 @@ class UsageAccumulator:
             self.input_tokens = usage.get("input_tokens", 0)
             # Cache fields are emitted on the initial usage block when
             # prompt caching is in use (zero/absent otherwise).
-            self.cache_creation_input_tokens = usage.get(
-                "cache_creation_input_tokens", 0
-            ) or 0
-            self.cache_read_input_tokens = usage.get(
-                "cache_read_input_tokens", 0
-            ) or 0
+            self.cache_creation_input_tokens = usage.get("cache_creation_input_tokens", 0) or 0
+            self.cache_read_input_tokens = usage.get("cache_read_input_tokens", 0) or 0
         elif event_type == "message_delta":
             usage = data.get("usage", {})
             self.output_tokens = usage.get("output_tokens", self.output_tokens)
             # Some Anthropic event shapes restate cache fields on the delta;
             # accept the latest value when present, otherwise keep prior.
             if "cache_creation_input_tokens" in usage:
-                self.cache_creation_input_tokens = (
-                    usage.get("cache_creation_input_tokens", 0) or 0
-                )
+                self.cache_creation_input_tokens = usage.get("cache_creation_input_tokens", 0) or 0
             if "cache_read_input_tokens" in usage:
-                self.cache_read_input_tokens = (
-                    usage.get("cache_read_input_tokens", 0) or 0
-                )
+                self.cache_read_input_tokens = usage.get("cache_read_input_tokens", 0) or 0
             self.stop_reason = data.get("delta", {}).get("stop_reason", self.stop_reason)
 
 
@@ -94,18 +86,20 @@ CAP_HIT_HEADER = "X-Tourniquet-Cap-Hit"
 #     causes double-bills on client retries.
 #   - x-stainless-* — SDK fingerprint headers Anthropic uses for support
 #     debugging; harmless to forward and useful when triaging client issues.
-FORWARD_HEADERS = frozenset({
-    "content-type",
-    "anthropic-version",
-    "anthropic-beta",
-    "idempotency-key",
-    "x-stainless-arch",
-    "x-stainless-lang",
-    "x-stainless-os",
-    "x-stainless-package-version",
-    "x-stainless-runtime",
-    "x-stainless-runtime-version",
-})
+FORWARD_HEADERS = frozenset(
+    {
+        "content-type",
+        "anthropic-version",
+        "anthropic-beta",
+        "idempotency-key",
+        "x-stainless-arch",
+        "x-stainless-lang",
+        "x-stainless-os",
+        "x-stainless-package-version",
+        "x-stainless-runtime",
+        "x-stainless-runtime-version",
+    }
+)
 
 
 def build_cap_hit_event(
@@ -119,21 +113,23 @@ def build_cap_hit_event(
     The cap and spend values are best-effort and may be empty when the
     provider is invoked outside the proxy (e.g. in unit tests).
     """
-    error_payload = json.dumps({
-        "type": "error",
-        "error": {
-            "type": "tourniquet_cap_hit",
-            "message": "Daily spend cap reached. Resets at midnight UTC.",
-            "cap_usd_cents": cap_usd_cents,
-            "spent_usd_cents": spent_usd_cents,
-            "resets_at": resets_at,
-        },
-    })
+    error_payload = json.dumps(
+        {
+            "type": "error",
+            "error": {
+                "type": "tourniquet_cap_hit",
+                "message": "Daily spend cap reached. Resets at midnight UTC.",
+                "cap_usd_cents": cap_usd_cents,
+                "spent_usd_cents": spent_usd_cents,
+                "resets_at": resets_at,
+            },
+        }
+    )
     return (
-        'event: message_stop\n'
+        "event: message_stop\n"
         'data: {"type":"message_stop","stop_reason":"end_turn"}\n\n'
-        f'event: error\n'
-        f'data: {error_payload}\n\n'
+        f"event: error\n"
+        f"data: {error_payload}\n\n"
     )
 
 
@@ -155,9 +151,7 @@ async def stream_request(
     """
     acc = UsageAccumulator()
 
-    forward_headers = {
-        k: v for k, v in headers.items() if k.lower() in FORWARD_HEADERS
-    }
+    forward_headers = {k: v for k, v in headers.items() if k.lower() in FORWARD_HEADERS}
     forward_headers["x-api-key"] = anthropic_key
     forward_headers.setdefault("anthropic-version", "2023-06-01")
 
@@ -178,14 +172,14 @@ async def stream_request(
                 continue
 
             if line.startswith("event:"):
-                event_type = line[len("event:"):].strip()
+                event_type = line[len("event:") :].strip()
             elif line.startswith("data:"):
                 if not event_type:
                     # `data:` with no preceding `event:` — protocol violation
                     # or partial frame. Forward the raw line but do not ingest.
                     yield (line + "\n").encode(), acc
                     continue
-                raw = line[len("data:"):].strip()
+                raw = line[len("data:") :].strip()
                 try:
                     data = json.loads(raw)
                 except json.JSONDecodeError:

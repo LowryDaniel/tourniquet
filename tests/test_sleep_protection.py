@@ -59,9 +59,13 @@ def test_pmset_owner_filters_by_assertion_type():
     assertion. With Claude listed before WhatsApp, the buggy code incorrectly
     reported Claude as the wake-lock holder.
     """
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Darwin"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_PMSET_OUTPUT_WHATSAPP_HOLDS_ASSERTION)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Darwin"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_PMSET_OUTPUT_WHATSAPP_HOLDS_ASSERTION),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result["platform"] == "darwin"
@@ -71,9 +75,13 @@ def test_pmset_owner_filters_by_assertion_type():
 
 def test_pmset_caffeinate_owner_recognised():
     """When caffeinate holds the assertion, owner must be the literal string 'caffeinate'."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Darwin"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_PMSET_OUTPUT_CAFFEINATE_HOLDS_ASSERTION)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Darwin"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_PMSET_OUTPUT_CAFFEINATE_HOLDS_ASSERTION),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result["platform"] == "darwin"
@@ -105,9 +113,13 @@ _SYSTEMD_INHIBIT_NO_RELEVANT_LOCK = """\
 
 def test_linux_systemd_inhibit_active_when_tourniquet_holds_lock():
     """Linux returns active=True only when systemd-inhibit shows a relevant lock."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_SYSTEMD_INHIBIT_TOURNIQUET_HOLDING)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_SYSTEMD_INHIBIT_TOURNIQUET_HOLDING),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "linux", "active": True, "owner": "systemd-inhibit"}
@@ -115,9 +127,13 @@ def test_linux_systemd_inhibit_active_when_tourniquet_holds_lock():
 
 def test_linux_no_relevant_inhibitor_returns_inactive():
     """When no idle:sleep / tourniquet inhibitor is present, active=False (honest unknown)."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_SYSTEMD_INHIBIT_NO_RELEVANT_LOCK)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_SYSTEMD_INHIBIT_NO_RELEVANT_LOCK),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "linux", "active": False, "owner": ""}
@@ -125,8 +141,10 @@ def test_linux_no_relevant_inhibitor_returns_inactive():
 
 def test_linux_systemd_inhibit_missing_returns_inactive():
     """If `systemd-inhibit` isn't installed, fall back to active=False — never lie."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"), \
-         patch("tourniquet.dashboard.routes.subprocess.run", side_effect=FileNotFoundError()):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"),
+        patch("tourniquet.dashboard.routes.subprocess.run", side_effect=FileNotFoundError()),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "linux", "active": False, "owner": ""}
@@ -134,9 +152,13 @@ def test_linux_systemd_inhibit_missing_returns_inactive():
 
 def test_linux_systemd_inhibit_timeout_returns_inactive():
     """If `systemd-inhibit` hangs, treat as inactive — never block the dashboard."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=subprocess.TimeoutExpired(cmd=["systemd-inhibit"], timeout=2)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd=["systemd-inhibit"], timeout=2),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "linux", "active": False, "owner": ""}
@@ -189,9 +211,13 @@ None.
 
 def test_windows_powercfg_active_when_system_request_present():
     """Windows returns active=True when SYSTEM section lists a wake-lock holder."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_POWERCFG_SYSTEM_REQUEST_PRESENT)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_POWERCFG_SYSTEM_REQUEST_PRESENT),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "windows", "active": True, "owner": "system-execution-state"}
@@ -199,9 +225,13 @@ def test_windows_powercfg_active_when_system_request_present():
 
 def test_windows_powercfg_inactive_when_system_is_none():
     """When `SYSTEM:\\nNone.` is reported, the box can sleep — return active=False."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"), \
-         patch("tourniquet.dashboard.routes.subprocess.run",
-               side_effect=_fake_run_factory(_POWERCFG_NO_SYSTEM_REQUEST)):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"),
+        patch(
+            "tourniquet.dashboard.routes.subprocess.run",
+            side_effect=_fake_run_factory(_POWERCFG_NO_SYSTEM_REQUEST),
+        ),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "windows", "active": False, "owner": ""}
@@ -209,8 +239,10 @@ def test_windows_powercfg_inactive_when_system_is_none():
 
 def test_windows_powercfg_missing_returns_inactive():
     """If `powercfg` isn't reachable (sandboxed install, missing PATH), fall back honestly."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"), \
-         patch("tourniquet.dashboard.routes.subprocess.run", side_effect=FileNotFoundError()):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"),
+        patch("tourniquet.dashboard.routes.subprocess.run", side_effect=FileNotFoundError()),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "windows", "active": False, "owner": ""}
@@ -218,8 +250,10 @@ def test_windows_powercfg_missing_returns_inactive():
 
 def test_windows_powercfg_oserror_returns_inactive():
     """Permission errors (some installs require admin) must not crash the dashboard."""
-    with patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"), \
-         patch("tourniquet.dashboard.routes.subprocess.run", side_effect=OSError("Access denied")):
+    with (
+        patch("tourniquet.dashboard.routes.platform.system", return_value="Windows"),
+        patch("tourniquet.dashboard.routes.subprocess.run", side_effect=OSError("Access denied")),
+    ):
         result = _sleep_protection_status()
 
     assert result == {"platform": "windows", "active": False, "owner": ""}

@@ -16,6 +16,7 @@ from pathlib import Path
 
 # ── Platform implementations ───────────────────────────────────────────────────
 
+
 def register_windows() -> None:
     """Write HKCU registry keys so Windows dispatches tourniquet:// URLs."""
     try:
@@ -78,13 +79,13 @@ def register_macos() -> None:
         "Option A — Shortcuts.app:\n"
         "  1. Open Shortcuts.app → File → New Shortcut\n"
         "  2. Add a 'Run Shell Script' action with body:\n"
-        "       tourniquet handle-url \"$1\"\n"
+        '       tourniquet handle-url "$1"\n'
         "  3. In Shortcuts preferences, enable 'Allow Running Scripts'\n"
         "\n"
         "Option B — Automator:\n"
         "  1. Open Automator → New Document → Application\n"
         "  2. Add 'Run Shell Script' action:\n"
-        "       tourniquet handle-url \"$1\"\n"
+        '       tourniquet handle-url "$1"\n'
         "  3. Save as tourniquet-handler.app to ~/Applications\n"
         "  4. Run once to register the bundle; then run:\n"
         "       /System/Library/Frameworks/CoreServices.framework/Frameworks/"
@@ -104,6 +105,7 @@ def register() -> None:
 
 
 # ── URL parsing / dispatch ─────────────────────────────────────────────────────
+
 
 def handle_url(url: str) -> int:
     """Parse a tourniquet:// URL and dispatch the appropriate action.
@@ -160,9 +162,7 @@ def _do_lift(key_id: str, multiplier: float) -> int:
 
     async def _run() -> int:
         async with get_session() as session:
-            result = await session.execute(
-                select(ApiKey).where(ApiKey.id == key_id)
-            )
+            result = await session.execute(select(ApiKey).where(ApiKey.id == key_id))
             key = result.scalar_one_or_none()
             if not key:
                 print(f"ERROR: no key with id {key_id!r}", flush=True)
@@ -170,9 +170,7 @@ def _do_lift(key_id: str, multiplier: float) -> int:
 
             now = datetime.now(UTC)
             tomorrow = now.date() + timedelta(days=1)
-            expires_at = datetime(
-                tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC
-            )
+            expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
             raw = int(key.daily_cap_usd_cents * multiplier)
             lifted = min(raw, key.absolute_ceiling_usd_cents)
             key.lifted_cap_usd_cents = lifted

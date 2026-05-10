@@ -103,8 +103,7 @@ async def seeded_key(session_factory):
         # User row first — ApiKey FKs to users.id.
         await s.execute(
             text(
-                "INSERT INTO users (id, email, created_at) "
-                "VALUES (:id, :email, CURRENT_TIMESTAMP)"
+                "INSERT INTO users (id, email, created_at) VALUES (:id, :email, CURRENT_TIMESTAMP)"
             ),
             {"id": str(user_id), "email": f"u-{user_id}@example.com"},
         )
@@ -154,10 +153,7 @@ async def _read_caps_today(session_factory, key_id: uuid.UUID) -> int:
     async with session_factory() as s:
         row = (
             await s.execute(
-                text(
-                    "SELECT total_usd_cents FROM caps_today "
-                    "WHERE api_key_id = :id AND date = :d"
-                ),
+                text("SELECT total_usd_cents FROM caps_today WHERE api_key_id = :id AND date = :d"),
                 {"id": str(key_id), "d": date.today()},
             )
         ).first()
@@ -206,24 +202,28 @@ async def test_concurrent_requests_respect_cap(
     # Mock Anthropic upstream — return a small 1¢ response so reconciliation
     # refunds most of each ~11¢ reservation. The CAP test cares about the
     # reservation, not the actual cost.
-    upstream_body = json.dumps({
-        "id": "msg_concurrency",
-        "model": "claude-haiku-4-5-20251001",  # cheap model
-        "usage": {"input_tokens": 1, "output_tokens": 1},
-        "content": [],
-        "role": "assistant",
-        "stop_reason": "end_turn",
-        "type": "message",
-    })
+    upstream_body = json.dumps(
+        {
+            "id": "msg_concurrency",
+            "model": "claude-haiku-4-5-20251001",  # cheap model
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+            "content": [],
+            "role": "assistant",
+            "stop_reason": "end_turn",
+            "type": "message",
+        }
+    )
 
     # Build a request body whose pre-flight worst-case is ~11¢ on haiku-4-5
     # (input $0.80/M, output $4/M). max_tokens=25_000 → 25_000*400/1M = 10c
     # plus ~1c rounding → 11c reserved per request.
-    request_body = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 25_000,
-        "messages": [{"role": "user", "content": "hi"}],
-    }).encode()
+    request_body = json.dumps(
+        {
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 25_000,
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+    ).encode()
 
     # ── Deterministic fence ────────────────────────────────────────────────
     # `expected_reservations`: every coroutine attempts exactly one
@@ -234,6 +234,7 @@ async def test_concurrent_requests_respect_cap(
     all_reservations_done = asyncio.Event()
 
     import tourniquet.proxy.router as router_mod
+
     original_reserve = router_mod.reserve_or_reject
 
     async def _counting_reserve(*args, **kwargs):
@@ -277,9 +278,7 @@ async def test_concurrent_requests_respect_cap(
         rsx.post("https://slack.com/api/chat.postMessage").mock(
             return_value=httpx.Response(200, json={"ok": True})
         )
-        rsx.route(host="api.telegram.org").mock(
-            return_value=httpx.Response(200, json={"ok": True})
-        )
+        rsx.route(host="api.telegram.org").mock(return_value=httpx.Response(200, json={"ok": True}))
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -337,26 +336,28 @@ async def test_streaming_reservation_reconciles_overestimate(
     await _set_cap(session_factory, seeded_key["key_id"], 500)()
 
     sse_response = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_stream","model":"claude-haiku-4-5-20251001","usage":{"input_tokens":2500}}}\n\n'  # noqa: E501
-        'event: content_block_start\n'
+        "event: content_block_start\n"
         'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'  # noqa: E501
-        'event: content_block_delta\n'
+        "event: content_block_delta\n"
         'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'  # noqa: E501
-        'event: content_block_stop\n'
+        "event: content_block_stop\n"
         'data: {"type":"content_block_stop","index":0}\n\n'
-        'event: message_delta\n'
+        "event: message_delta\n"
         'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2500}}\n\n'  # noqa: E501
-        'event: message_stop\n'
+        "event: message_stop\n"
         'data: {"type":"message_stop"}\n\n'
     )
 
-    request_body = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 125_000,  # worst-case ≈ 50¢ on haiku
-        "stream": True,
-        "messages": [{"role": "user", "content": "hi"}],
-    }).encode()
+    request_body = json.dumps(
+        {
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 125_000,  # worst-case ≈ 50¢ on haiku
+            "stream": True,
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+    ).encode()
 
     from tourniquet.main import app
 
@@ -370,17 +371,20 @@ async def test_streaming_reservation_reconciles_overestimate(
         )
 
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver", timeout=30.0
-        ) as client, client.stream(
-            "POST",
-            "/v1/messages",
-            content=request_body,
-            headers={
-                "authorization": f"Bearer {seeded_key['token']}",
-                "content-type": "application/json",
-            },
-        ) as resp:
+        async with (
+            httpx.AsyncClient(
+                transport=transport, base_url="http://testserver", timeout=30.0
+            ) as client,
+            client.stream(
+                "POST",
+                "/v1/messages",
+                content=request_body,
+                headers={
+                    "authorization": f"Bearer {seeded_key['token']}",
+                    "content-type": "application/json",
+                },
+            ) as resp,
+        ):
             # Drain the SSE so the proxy's _generate() finishes and runs
             # the post-stream reconcile path.
             body_bytes = b""
@@ -390,6 +394,7 @@ async def test_streaming_reservation_reconciles_overestimate(
 
     # Compute expectations with the same pricing function the production code uses.
     from tourniquet.billing.pricing import cost_usd_cents
+
     actual_cost = cost_usd_cents("claude-haiku-4-5-20251001", 2500, 2500)
 
     final_total = await _read_caps_today(session_factory, seeded_key["key_id"])

@@ -54,8 +54,7 @@ async def send_telegram_recovery_offer(
         return f"+${c // 100}" if c % 100 == 0 else f"+${c / 100:.2f}"
 
     row = [
-        {"text": _label(c), "callback_data": f"lift_by_amount|{key_id}|{c}"}
-        for c in amounts_cents
+        {"text": _label(c), "callback_data": f"lift_by_amount|{key_id}|{c}"} for c in amounts_cents
     ]
     row.append({"text": "Leave it", "callback_data": f"lift_by_amount|{key_id}|0"})
 

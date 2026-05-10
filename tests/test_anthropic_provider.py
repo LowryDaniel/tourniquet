@@ -22,13 +22,16 @@ from tourniquet.providers.anthropic import (
 
 def test_usage_accumulator_ingests_message_start():
     acc = UsageAccumulator()
-    acc.ingest_event("message_start", {
-        "message": {
-            "id": "msg_123",
-            "model": "claude-sonnet-4-6",
-            "usage": {"input_tokens": 100},
-        }
-    })
+    acc.ingest_event(
+        "message_start",
+        {
+            "message": {
+                "id": "msg_123",
+                "model": "claude-sonnet-4-6",
+                "usage": {"input_tokens": 100},
+            }
+        },
+    )
     assert acc.input_tokens == 100
     assert acc.model == "claude-sonnet-4-6"
     assert acc.request_id == "msg_123"
@@ -36,10 +39,13 @@ def test_usage_accumulator_ingests_message_start():
 
 def test_usage_accumulator_ingests_message_delta():
     acc = UsageAccumulator()
-    acc.ingest_event("message_delta", {
-        "delta": {"stop_reason": "end_turn"},
-        "usage": {"output_tokens": 42},
-    })
+    acc.ingest_event(
+        "message_delta",
+        {
+            "delta": {"stop_reason": "end_turn"},
+            "usage": {"output_tokens": 42},
+        },
+    )
     assert acc.output_tokens == 42
     assert acc.stop_reason == "end_turn"
 
@@ -56,13 +62,13 @@ def test_usage_accumulator_takes_final_output_count():
 async def test_stream_passes_through_under_cap():
     """When cap-check always returns False, all bytes flow through."""
     sse_response = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_abc","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'  # noqa: E501
-        'event: content_block_delta\n'
+        "event: content_block_delta\n"
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}\n\n'
-        'event: message_delta\n'
+        "event: message_delta\n"
         'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'  # noqa: E501
-        'event: message_stop\n'
+        "event: message_stop\n"
         'data: {"type":"message_stop"}\n\n'
     )
 
@@ -104,9 +110,9 @@ async def test_stream_passes_through_under_cap():
 async def test_stream_injects_cap_hit_event_mid_stream():
     """When cap-check returns True, synthetic message_stop is emitted and stream terminates."""
     sse_response = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_xyz","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
-        'event: content_block_delta\n'
+        "event: content_block_delta\n"
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"This should NOT appear"}}\n\n'  # noqa: E501
     )
 
@@ -145,7 +151,7 @@ async def test_sse_parser_handles_data_without_preceding_event():
         # Bare data line first — no preceding `event:`. The parser must skip ingest.
         'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":999}}}\n\n'  # noqa: E501
         # Then a normal event so the rest of the stream is well-formed.
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_real","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'  # noqa: E501
     )
 
@@ -186,14 +192,14 @@ async def test_sse_parser_resets_event_type_on_blank_line():
     previous event's type (M3)."""
     sse_response = (
         # First event — message_start with input_tokens=10
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_one","model":"claude-sonnet-4-6","usage":{"input_tokens":10}}}\n'  # noqa: E501
-        '\n'
+        "\n"
         # Blank line separates events; event_type should be reset here.
         # An orphan `data:` line should be skipped (not re-ingested as message_start).
         'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":7777}}}\n\n'  # noqa: E501
         # Second proper event — message_delta with output_tokens=5
-        'event: message_delta\n'
+        "event: message_delta\n"
         'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'  # noqa: E501
     )
 
@@ -250,7 +256,7 @@ def test_cap_hit_event_emits_separate_error_block():
     error_block = event.split("event: error\n", 1)[1]
     error_data_line = error_block.splitlines()[0]
     assert error_data_line.startswith("data: ")
-    payload = json.loads(error_data_line[len("data: "):])
+    payload = json.loads(error_data_line[len("data: ") :])
     assert payload["type"] == "error"
     assert payload["error"]["type"] == "tourniquet_cap_hit"
     assert payload["error"]["cap_usd_cents"] == 500

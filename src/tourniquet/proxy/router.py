@@ -100,9 +100,7 @@ async def _legacy_bcrypt_scan(raw: str, session: AsyncSession) -> ApiKey | None:
 
     Returns None if no legacy row matches (caller raises 401).
     """
-    result = await session.execute(
-        select(ApiKey).where(ApiKey.tq_token_sha256.is_(None))
-    )
+    result = await session.execute(select(ApiKey).where(ApiKey.tq_token_sha256.is_(None)))
     legacy_keys = result.scalars().all()
 
     for key in legacy_keys:
@@ -130,9 +128,7 @@ async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
     raw = token.removeprefix("Bearer ").strip()
 
     sha = hashlib.sha256(raw.encode()).hexdigest()
-    result = await session.execute(
-        select(ApiKey).where(ApiKey.tq_token_sha256 == sha)
-    )
+    result = await session.execute(select(ApiKey).where(ApiKey.tq_token_sha256 == sha))
     key = result.scalar_one_or_none()
 
     if key is None:
@@ -183,10 +179,7 @@ def _cap_hit_payload(
     lift_expires_at_iso: str | None,
 ) -> dict[str, Any]:
     """Build the canonical 402 `tourniquet_cap_hit` payload."""
-    resets_at = (
-        datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
-        + timedelta(days=1)
-    )
+    resets_at = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC) + timedelta(days=1)
     currency = settings.display_currency
     return {
         "error": {
@@ -268,9 +261,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse |
         reserved_cents = 0
         if api_key.kill_enabled:
             _model, reserved_cents = _estimate_worst_case_cents(parsed)
-            ok = await reserve_or_reject(
-                api_key.id, today, reserved_cents, cap_cents, session
-            )
+            ok = await reserve_or_reject(api_key.id, today, reserved_cents, cap_cents, session)
             if not ok:
                 # Reservation rejected — read the current spend for the
                 # response payload (best-effort; the actual gate already
@@ -329,12 +320,8 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse |
                 request_id = parsed_resp.get("id", "") or ""
                 in_tokens = int(usage.get("input_tokens", 0) or 0)
                 out_tokens = int(usage.get("output_tokens", 0) or 0)
-                cache_creation_tokens = int(
-                    usage.get("cache_creation_input_tokens", 0) or 0
-                )
-                cache_read_tokens = int(
-                    usage.get("cache_read_input_tokens", 0) or 0
-                )
+                cache_creation_tokens = int(usage.get("cache_creation_input_tokens", 0) or 0)
+                cache_read_tokens = int(usage.get("cache_read_input_tokens", 0) or 0)
             except Exception:
                 pass
 
@@ -371,9 +358,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse |
                 # Background fan_out task is spawned so the proxy response
                 # isn't held up by Slack/Telegram round-trips.
                 # Spend-after-this-request reflects the reconciled total.
-                spend_after = (
-                    spent_cents_with_reservation - reserved_cents + actual_cost
-                )
+                spend_after = spent_cents_with_reservation - reserved_cents + actual_cost
                 await maybe_fire_threshold_alert(
                     api_key,
                     spend_after,
@@ -458,9 +443,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse |
                     # Threshold-alert wiring (streaming path) — same idempotency
                     # guarantees as the non-streaming path. Sees the spend
                     # *after* this stream's contribution.
-                    spend_after = (
-                        spent_cents_with_reservation - reserved_cents + actual_cost
-                    )
+                    spend_after = spent_cents_with_reservation - reserved_cents + actual_cost
                     await maybe_fire_threshold_alert(
                         api_key,
                         spend_after,

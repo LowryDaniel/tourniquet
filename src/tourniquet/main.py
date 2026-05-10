@@ -28,15 +28,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Idempotent: re-run is a no-op if tables already exist.
     from tourniquet.db import engine
     from tourniquet.models import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     # Auto-start Telegram polling so inline buttons work in-app without a webhook
     from tourniquet.alerts.telegram_poller import poller as telegram_poller
+
     await telegram_poller.start()
 
     # Auto-start Slack Socket Mode so inline buttons work in-app without an HTTPS callback URL
     from tourniquet.alerts.slack_socket import socket_client as slack_socket_client
+
     await slack_socket_client.start()
 
     try:

@@ -62,5 +62,8 @@ async def record_action(
     except Exception as exc:  # pragma: no cover — defensive
         log.warning(
             "Audit record failed for action=%s source=%s key=%s: %s",
-            action, source, api_key_id, exc,
+            action,
+            source,
+            api_key_id,
+            exc,
         )

@@ -107,23 +107,19 @@ def test_no_network_imports():
     """insights.py must never import network-capable modules."""
     forbidden = {"httpx", "requests", "urllib", "urllib3", "socket", "aiohttp"}
     import tourniquet.analytics.insights as mod
+
     # Walk the module's direct imports via its __dict__ values
     for name in forbidden:
         # Check the module itself doesn't hold a reference to these
-        assert name not in mod.__dict__, (
-            f"insights.py imported '{name}' — this could phone home!"
-        )
+        assert name not in mod.__dict__, f"insights.py imported '{name}' — this could phone home!"
 
     # Stronger check: reload from source and assert no forbidden name in imports
     import inspect
+
     source = inspect.getsource(mod)
     for name in forbidden:
-        assert f"import {name}" not in source, (
-            f"insights.py has 'import {name}' — not allowed!"
-        )
-        assert f"from {name}" not in source, (
-            f"insights.py has 'from {name}' — not allowed!"
-        )
+        assert f"import {name}" not in source, f"insights.py has 'import {name}' — not allowed!"
+        assert f"from {name}" not in source, f"insights.py has 'from {name}' — not allowed!"
 
 
 # ── Core computation tests ─────────────────────────────────────────────────────
@@ -266,9 +262,7 @@ async def test_by_metadata_user_id(session: AsyncSession):
     session.add(
         _event(key.id, 200, metadata_user_id="task-002", created_at=now - timedelta(hours=2))
     )
-    session.add(
-        _event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3))
-    )
+    session.add(_event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3)))
     await session.commit()
 
     report = await compute_insights(key.id, days=7, session=session)

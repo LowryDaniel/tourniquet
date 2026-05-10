@@ -31,12 +31,14 @@ class _UUIDType(TypeDecorator[uuid.UUID]):
 
     Stored as CHAR(36) string in SQLite, native UUID in Postgres.
     """
+
     impl = CHAR
     cache_ok = True
 
     def load_dialect_impl(self, dialect: Any) -> Any:
         if dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
             return dialect.type_descriptor(PG_UUID())
         return dialect.type_descriptor(CHAR(36))
 
@@ -91,7 +93,10 @@ class ApiKey(Base):
     # to support legacy rows created before C3; backfilled on first match
     # via the bcrypt fallback path.
     tq_token_sha256: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, unique=True, index=True,
+        String(64),
+        nullable=True,
+        unique=True,
+        index=True,
     )
     anthropic_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[str] = mapped_column(String(50), nullable=False, default="standard")
@@ -197,10 +202,16 @@ class ApiKeyAction(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
     api_key_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False, index=True,
+        UUID(),
+        ForeignKey("api_keys.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
     )
     action: Mapped[str] = mapped_column(String(40), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False)

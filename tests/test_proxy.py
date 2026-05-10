@@ -66,9 +66,9 @@ def _split_sse_blocks(body: str) -> list[dict[str, str]]:
         ev: dict[str, str] = {}
         for line in block.splitlines():
             if line.startswith("event:"):
-                ev["event"] = line[len("event:"):].strip()
+                ev["event"] = line[len("event:") :].strip()
             elif line.startswith("data:"):
-                ev["data"] = line[len("data:"):].strip()
+                ev["data"] = line[len("data:") :].strip()
         if ev:
             blocks.append(ev)
     return blocks
@@ -81,7 +81,7 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
     not reject the event.
     """
     sse_response = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
@@ -115,9 +115,7 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
         # The synthetic stop block — last one — must use documented enum.
         synthetic = stop_blocks[-1]
         payload = json.loads(synthetic["data"])
-        assert payload["stop_reason"] == "end_turn", (
-            f"expected stop_reason=end_turn, got {payload}"
-        )
+        assert payload["stop_reason"] == "end_turn", f"expected stop_reason=end_turn, got {payload}"
         # And the legacy unknown-enum value must not appear in the stop block.
         assert "tourniquet_cap_hit" not in synthetic["data"]
 
@@ -130,7 +128,7 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
     get a clean end_turn from the message_stop block.
     """
     sse_response = (
-        'event: message_start\n'
+        "event: message_start\n"
         'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
@@ -183,9 +181,7 @@ def _build_fake_key(token: str, *, with_sha256: bool = True) -> MagicMock:
     key.id = uuid.uuid4()
     key.name = "k"
     key.tq_token_hash = bcrypt.hashpw(token.encode(), bcrypt.gensalt()).decode()
-    key.tq_token_sha256 = (
-        hashlib.sha256(token.encode()).hexdigest() if with_sha256 else None
-    )
+    key.tq_token_sha256 = hashlib.sha256(token.encode()).hexdigest() if with_sha256 else None
     return key
 
 
@@ -237,9 +233,7 @@ async def test_proxy_auth_uses_sha256_lookup():
     resolved = await _resolve_api_key(f"Bearer {token}", session)
 
     assert resolved is fake_key
-    assert queries == ["sha256"], (
-        f"expected one indexed SELECT, got {queries}"
-    )
+    assert queries == ["sha256"], f"expected one indexed SELECT, got {queries}"
     # The fast path must not commit — there's nothing to backfill.
     session.commit.assert_not_called()
 
@@ -254,10 +248,12 @@ async def test_legacy_bcrypt_token_still_works():
     token = "tq_legacy_token"
     legacy_key = _build_fake_key(token, with_sha256=False)
     assert legacy_key.tq_token_sha256 is None  # pre-condition
-    session, queries = _make_query_counting_session({
-        "sha256": [],            # fast path misses
-        "is_null": [legacy_key], # legacy scan finds it
-    })
+    session, queries = _make_query_counting_session(
+        {
+            "sha256": [],  # fast path misses
+            "is_null": [legacy_key],  # legacy scan finds it
+        }
+    )
 
     resolved = await _resolve_api_key(f"Bearer {token}", session)
 
@@ -281,10 +277,12 @@ async def test_proxy_auth_rejects_unknown_token():
 
     from tourniquet.proxy.router import _resolve_api_key
 
-    session, queries = _make_query_counting_session({
-        "sha256": [],   # fast path misses
-        "is_null": [],  # no legacy rows to bcrypt-check
-    })
+    session, queries = _make_query_counting_session(
+        {
+            "sha256": [],  # fast path misses
+            "is_null": [],  # no legacy rows to bcrypt-check
+        }
+    )
 
     t0 = time.perf_counter()
     with pytest.raises(HTTPException) as exc_info:
@@ -296,9 +294,7 @@ async def test_proxy_auth_rejects_unknown_token():
     assert queries == ["sha256", "is_null"], queries
     # Bcrypt at default cost is ~100ms+ per check; with no rows to check,
     # this whole path should resolve in milliseconds.
-    assert elapsed < 0.05, (
-        f"unknown-token rejection took {elapsed * 1000:.1f}ms — should be <50ms"
-    )
+    assert elapsed < 0.05, f"unknown-token rejection took {elapsed * 1000:.1f}ms — should be <50ms"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -314,6 +310,7 @@ def test_proxy_rejects_oversized_body(client, monkeypatch):
     """
     # Tighten the ceiling so the test stays fast (1 KiB instead of 10 MiB).
     import tourniquet.config as cfg
+
     monkeypatch.setattr(cfg.settings, "max_request_body_bytes", 1024)
 
     # Body just over the configured ceiling.
@@ -396,6 +393,7 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
                 yield sess
 
         import tourniquet.proxy.router as router_mod
+
         monkeypatch.setattr(router_mod, "get_session", _get_session)
 
         # ── Capture the upstream request via respx ─────────────────────────
@@ -406,23 +404,27 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
                 captured[hk.lower()] = hv
             return httpx.Response(
                 200,
-                content=json.dumps({
-                    "id": "msg_idem",
-                    "model": "claude-haiku-4-5-20251001",
-                    "usage": {"input_tokens": 1, "output_tokens": 1},
-                    "content": [],
-                    "role": "assistant",
-                    "stop_reason": "end_turn",
-                    "type": "message",
-                }),
+                content=json.dumps(
+                    {
+                        "id": "msg_idem",
+                        "model": "claude-haiku-4-5-20251001",
+                        "usage": {"input_tokens": 1, "output_tokens": 1},
+                        "content": [],
+                        "role": "assistant",
+                        "stop_reason": "end_turn",
+                        "type": "message",
+                    }
+                ),
                 headers={"content-type": "application/json"},
             )
 
-        request_body = json.dumps({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 16,
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        request_body = json.dumps(
+            {
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 16,
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
 
         from tourniquet.main import app
 

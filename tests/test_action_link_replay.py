@@ -15,6 +15,7 @@ from tourniquet.routes.admin import build_lift_by_amount_url, router
 
 def _make_app():
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(router)
     return app
@@ -50,6 +51,7 @@ def _make_has_replay_session():
 
 
 # ── lift-by-amount replay protection ─────────────────────────────────────────
+
 
 def test_lift_by_amount_second_use_returns_400():
     """Using a lift-by-amount token twice: first use succeeds, second returns 400
@@ -99,6 +101,7 @@ def test_lift_by_amount_second_use_returns_400():
 
 # ── m7: concurrent same-token race ───────────────────────────────────────────
 
+
 def test_lift_by_amount_concurrent_replay_one_winner_one_loser():
     """m7: two concurrent same-token POSTs — exactly one succeeds.
 
@@ -135,9 +138,7 @@ def test_lift_by_amount_concurrent_replay_one_winner_one_loser():
         raise IntegrityError(
             statement="INSERT INTO api_key_actions ...",
             params=None,
-            orig=Exception(
-                "UNIQUE constraint failed: ix_api_key_actions_unique_token"
-            ),
+            orig=Exception("UNIQUE constraint failed: ix_api_key_actions_unique_token"),
         )
 
     def _post_once():

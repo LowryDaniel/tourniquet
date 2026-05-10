@@ -37,6 +37,7 @@ def _make_session_cm(user: MagicMock):
 
 # ── Test 1: fresh token verifies, creates session, NULLs token ────────────────
 
+
 def test_verify_fresh_token_creates_session():
     from fastapi.testclient import TestClient
 
@@ -59,6 +60,7 @@ def test_verify_fresh_token_creates_session():
 
 # ── Test 2: replaying the same token returns 400 ─────────────────────────────
 
+
 def test_verify_replayed_token_returns_400():
     from fastapi.testclient import TestClient
 
@@ -79,6 +81,7 @@ def test_verify_replayed_token_returns_400():
 
 # ── Test 3: tampered token returns 400 ───────────────────────────────────────
 
+
 def test_verify_tampered_token_returns_400():
     from fastapi.testclient import TestClient
 
@@ -91,6 +94,7 @@ def test_verify_tampered_token_returns_400():
 
 
 # ── Test 4: valid token with mismatched stored hash returns 400 ───────────────
+
 
 def test_verify_hash_mismatch_returns_400():
     from fastapi.testclient import TestClient

@@ -74,8 +74,8 @@ class Settings(BaseSettings):
 
     display_currency: str = "USD"  # env var: DISPLAY_CURRENCY
 
-    absolute_ceiling_usd_cents: int = 10000   # env: ABSOLUTE_CEILING_USD_CENTS
-    suggestion_window_days: int = 14          # env: SUGGESTION_WINDOW_DAYS
+    absolute_ceiling_usd_cents: int = 10000  # env: ABSOLUTE_CEILING_USD_CENTS
+    suggestion_window_days: int = 14  # env: SUGGESTION_WINDOW_DAYS
 
     # ── Pre-flight max-cost guard ─────────────────────────────────────────────
     # Before proxying a request to Anthropic, estimate its worst-case cost and
@@ -83,8 +83,8 @@ class Settings(BaseSettings):
     # BOTH (max_overage_abs_cents) AND (max_overage_pct%). Small overages are
     # allowed (let it ride) — this is why we use AND, not OR. Protects against
     # runaway requests while being lenient on small overages.
-    max_overage_abs_cents: int = 50      # env: MAX_OVERAGE_ABS_CENTS — 50¢
-    max_overage_pct: int = 10            # env: MAX_OVERAGE_PCT — 10% of cap
+    max_overage_abs_cents: int = 50  # env: MAX_OVERAGE_ABS_CENTS — 50¢
+    max_overage_pct: int = 10  # env: MAX_OVERAGE_PCT — 10% of cap
 
     # ── Alert channels ────────────────────────────────────────────────────────
     slack_webhook_url: str = ""
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     enable_mac_notifications: bool = False
     # set ENABLE_DESKTOP_NOTIFICATIONS=true to enable on all platforms
     enable_desktop_notifications: bool = False
-    mac_notification_style: str = "both"           # "text" | "action" | "both"
+    mac_notification_style: str = "both"  # "text" | "action" | "both"
     # X-Telegram-Bot-Api-Secret-Token value, set when configuring the bot
     telegram_webhook_secret: str = ""
 

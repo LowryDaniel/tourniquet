@@ -18,6 +18,7 @@ from tourniquet.main import app
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _make_key(
     name: str = "test-key",
     daily_cap: int = 1000,
@@ -77,10 +78,18 @@ def client():
 # ── GET /dashboard ─────────────────────────────────────────────────────────────
 
 _MOCK_INSIGHTS = MagicMock(
-    by_model=[], by_caller=[], by_metadata_user_id=[],
-    suggestions=[], api_key_name="test", total_usd_cents=0,
-    request_count=0, cap_hit_days=0, cap_hit_days_prior=0,
-    hottest_hour=None, biggest_request=None, biggest_request_pct=0.0,
+    by_model=[],
+    by_caller=[],
+    by_metadata_user_id=[],
+    suggestions=[],
+    api_key_name="test",
+    total_usd_cents=0,
+    request_count=0,
+    cap_hit_days=0,
+    cap_hit_days_prior=0,
+    hottest_hour=None,
+    biggest_request=None,
+    biggest_request_pct=0.0,
 )
 
 
@@ -126,6 +135,7 @@ def test_dashboard_lists_multiple_keys(client):
 
 # ── GET /dashboard/key/<id> ────────────────────────────────────────────────────
 
+
 def test_key_panel_missing_returns_404(client):
     """GET /dashboard/key/<unknown-id> returns 404."""
     cm = _make_session_cm([])
@@ -147,10 +157,18 @@ def test_key_panel_returns_200(client):
     with (
         patch("tourniquet.dashboard.routes.get_session", cm),
         patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=200)),
-        patch("tourniquet.dashboard.routes.compute_insights", AsyncMock(return_value=MagicMock(
-            by_model=[], by_caller=[], by_metadata_user_id=[],
-            suggestions=[], api_key_name="test-key",
-        ))),
+        patch(
+            "tourniquet.dashboard.routes.compute_insights",
+            AsyncMock(
+                return_value=MagicMock(
+                    by_model=[],
+                    by_caller=[],
+                    by_metadata_user_id=[],
+                    suggestions=[],
+                    api_key_name="test-key",
+                )
+            ),
+        ),
     ):
         resp = client.get(f"/dashboard/key/{key.id}")
 
@@ -166,10 +184,18 @@ def test_key_panel_htmx_returns_fragment(client):
     with (
         patch("tourniquet.dashboard.routes.get_session", cm),
         patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=0)),
-        patch("tourniquet.dashboard.routes.compute_insights", AsyncMock(return_value=MagicMock(
-            by_model=[], by_caller=[], by_metadata_user_id=[],
-            suggestions=[], api_key_name="partial-key",
-        ))),
+        patch(
+            "tourniquet.dashboard.routes.compute_insights",
+            AsyncMock(
+                return_value=MagicMock(
+                    by_model=[],
+                    by_caller=[],
+                    by_metadata_user_id=[],
+                    suggestions=[],
+                    api_key_name="partial-key",
+                )
+            ),
+        ),
     ):
         resp = client.get(
             f"/dashboard/key/{key.id}",
@@ -183,6 +209,7 @@ def test_key_panel_htmx_returns_fragment(client):
 
 
 # ── POST /dashboard/key/<id>/cap ───────────────────────────────────────────────
+
 
 def test_update_cap(client):
     """POST /dashboard/key/<id>/cap with valid major-units updates daily_cap_usd_cents."""
@@ -290,6 +317,7 @@ def test_update_cap_rejects_above_ceiling(client):
 
 # ── POST /dashboard/key/<id>/lift ──────────────────────────────────────────────
 
+
 def test_lift_multiplier(client):
     """POST /dashboard/key/<id>/lift with multiplier=2 sets lifted_cap to 2× base."""
     written: dict = {}
@@ -342,6 +370,7 @@ def test_lift_multiplier(client):
 
 # ── POST /dashboard/key/<id>/rotate ───────────────────────────────────────────
 
+
 def test_rotate_returns_token_in_html(client):
     """POST /dashboard/key/<id>/rotate returns the new token in the HTML body."""
     key = _make_key(name="rotate-me")
@@ -358,11 +387,15 @@ def test_rotate_returns_token_in_html(client):
 
 # ── HTMX partial routes return fragments ──────────────────────────────────────
 
-@pytest.mark.parametrize("path_suffix", [
-    "/spend-now",
-    "/charts",
-    "/alerts",
-])
+
+@pytest.mark.parametrize(
+    "path_suffix",
+    [
+        "/spend-now",
+        "/charts",
+        "/alerts",
+    ],
+)
 def test_partial_routes_return_no_html_shell(client, path_suffix):
     """HTMX partial routes return HTML fragments without a full <html> shell."""
     key = _make_key()
@@ -371,10 +404,18 @@ def test_partial_routes_return_no_html_shell(client, path_suffix):
     with (
         patch("tourniquet.dashboard.routes.get_session", cm),
         patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=0)),
-        patch("tourniquet.dashboard.routes.compute_insights", AsyncMock(return_value=MagicMock(
-            by_model=[], by_caller=[], by_metadata_user_id=[],
-            suggestions=[], api_key_name=key.name,
-        ))),
+        patch(
+            "tourniquet.dashboard.routes.compute_insights",
+            AsyncMock(
+                return_value=MagicMock(
+                    by_model=[],
+                    by_caller=[],
+                    by_metadata_user_id=[],
+                    suggestions=[],
+                    api_key_name=key.name,
+                )
+            ),
+        ),
     ):
         resp = client.get(f"/dashboard/key/{key.id}{path_suffix}")
 

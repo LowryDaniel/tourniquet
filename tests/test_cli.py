@@ -7,11 +7,13 @@ from unittest.mock import MagicMock, patch
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _run_cli(*argv: str) -> int:
     """Run cli.main() with sys.argv patched. Returns SystemExit code or 0."""
     with patch("sys.argv", ["tourniquet", *argv]):
         try:
             from tourniquet.cli import main
+
             main()
             return 0
         except SystemExit as exc:
@@ -20,8 +22,10 @@ def _run_cli(*argv: str) -> int:
 
 # ── --version ──────────────────────────────────────────────────────────────────
 
+
 def test_version_flag(capsys):
     from tourniquet import __version__
+
     with contextlib.suppress(SystemExit):
         _run_cli("--version")
     captured = capsys.readouterr()
@@ -30,6 +34,7 @@ def test_version_flag(capsys):
 
 # ── start --no-browser calls uvicorn.run with correct args ─────────────────────
 
+
 def test_start_no_browser_calls_uvicorn(tmp_path):
     """start --no-browser should call uvicorn.run with correct host/port."""
 
@@ -37,10 +42,21 @@ def test_start_no_browser_calls_uvicorn(tmp_path):
         patch("uvicorn.run") as mock_run,
         patch("tourniquet.cli._init_config_dir"),
         patch("os.chdir"),
-        patch("sys.argv", ["tourniquet", "start", "--no-browser", "--port", "8787",
-                            "--config-dir", str(tmp_path)]),
+        patch(
+            "sys.argv",
+            [
+                "tourniquet",
+                "start",
+                "--no-browser",
+                "--port",
+                "8787",
+                "--config-dir",
+                str(tmp_path),
+            ],
+        ),
     ):
         from tourniquet.cli import main
+
         main()
 
     mock_run.assert_called_once()
@@ -53,6 +69,7 @@ def test_start_no_browser_calls_uvicorn(tmp_path):
 
 # ── start creates .env with keys when missing ──────────────────────────────────
 
+
 def test_start_creates_env_with_keys(tmp_path):
     """start should create ~/.tourniquet/.env with non-empty FERNET_KEY and SECRET_KEY."""
     config_dir = tmp_path / "tq_config"
@@ -60,10 +77,10 @@ def test_start_creates_env_with_keys(tmp_path):
     with (
         patch("uvicorn.run"),
         patch("os.chdir"),
-        patch("sys.argv", ["tourniquet", "start", "--no-browser",
-                            "--config-dir", str(config_dir)]),
+        patch("sys.argv", ["tourniquet", "start", "--no-browser", "--config-dir", str(config_dir)]),
     ):
         from tourniquet.cli import main
+
         main()
 
     env_path = config_dir / ".env"
@@ -81,6 +98,7 @@ def test_start_creates_env_with_keys(tmp_path):
 
 # ── config-dir override ────────────────────────────────────────────────────────
 
+
 def test_config_dir_override(tmp_path):
     """--config-dir should be respected: .env lands in the given directory."""
     custom_dir = tmp_path / "custom_cfg"
@@ -88,16 +106,17 @@ def test_config_dir_override(tmp_path):
     with (
         patch("uvicorn.run"),
         patch("os.chdir"),
-        patch("sys.argv", ["tourniquet", "start", "--no-browser",
-                            "--config-dir", str(custom_dir)]),
+        patch("sys.argv", ["tourniquet", "start", "--no-browser", "--config-dir", str(custom_dir)]),
     ):
         from tourniquet.cli import main
+
         main()
 
     assert (custom_dir / ".env").exists()
 
 
 # ── webbrowser.open called when --no-browser absent ───────────────────────────
+
 
 def test_browser_opens_without_no_browser_flag(tmp_path):
     """webbrowser.open should be called when --no-browser is not given."""
@@ -113,13 +132,14 @@ def test_browser_opens_without_no_browser_flag(tmp_path):
         patch("os.chdir"),
         patch("webbrowser.open", side_effect=fake_open),
         patch("time.sleep"),
-        patch("sys.argv", ["tourniquet", "start", "--port", "8787",
-                            "--config-dir", str(tmp_path)]),
+        patch("sys.argv", ["tourniquet", "start", "--port", "8787", "--config-dir", str(tmp_path)]),
     ):
         from tourniquet.cli import main
+
         main()
         # The thread is daemon; give it a tick to run
         import time as _time
+
         _time.sleep(0)  # yield — patched, so no real delay
 
     # The thread may not have fired yet in CI — just check it wasn't suppressed
@@ -130,6 +150,7 @@ def test_browser_opens_without_no_browser_flag(tmp_path):
 
 
 # ── _init_config_dir idempotent ────────────────────────────────────────────────
+
 
 def test_init_config_dir_idempotent(tmp_path):
     """Running _init_config_dir twice must not regenerate keys."""
@@ -146,6 +167,7 @@ def test_init_config_dir_idempotent(tmp_path):
 
 
 # ── register-url-handler: Windows ────────────────────────────────────────────
+
 
 def test_register_url_handler_windows(capsys):
     """Windows path: winreg.CreateKey and SetValueEx called with correct values."""
@@ -164,6 +186,7 @@ def test_register_url_handler_windows(capsys):
         from importlib import reload
 
         import tourniquet.url_handler as uh
+
         reload(uh)
         uh.register_windows()
 
@@ -179,6 +202,7 @@ def test_register_url_handler_windows(capsys):
 
 # ── register-url-handler: Linux ───────────────────────────────────────────────
 
+
 def test_register_url_handler_linux(tmp_path, capsys):
     """Linux path: .desktop file written with correct content."""
     with (
@@ -189,6 +213,7 @@ def test_register_url_handler_linux(tmp_path, capsys):
         from importlib import reload
 
         import tourniquet.url_handler as uh
+
         reload(uh)
         uh.register_linux()
 
@@ -202,12 +227,14 @@ def test_register_url_handler_linux(tmp_path, capsys):
 
 # ── register-url-handler: macOS prints instructions ───────────────────────────
 
+
 def test_register_url_handler_macos_prints_instructions(capsys):
     """macOS: register() must print setup instructions, not raise."""
     with patch("sys.platform", "darwin"):
         from importlib import reload
 
         import tourniquet.url_handler as uh
+
         reload(uh)
         uh.register_macos()
 
@@ -217,11 +244,13 @@ def test_register_url_handler_macos_prints_instructions(capsys):
 
 # ── handle-url: valid lift URL dispatches to lift logic ───────────────────────
 
+
 def test_handle_url_lift_dispatches(tmp_path):
     """handle_url with a valid tourniquet://lift/<id> URL calls _do_lift."""
     from importlib import reload
 
     import tourniquet.url_handler as uh
+
     reload(uh)
 
     fake_key_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -234,9 +263,11 @@ def test_handle_url_lift_dispatches(tmp_path):
 
 # ── handle-url: invalid URL exits non-zero ────────────────────────────────────
 
+
 def test_handle_url_invalid_scheme_returns_nonzero():
     """handle_url with wrong scheme must return non-zero."""
     import tourniquet.url_handler as uh
+
     rc = uh.handle_url("https://example.com/something")
     assert rc != 0
 
@@ -244,5 +275,6 @@ def test_handle_url_invalid_scheme_returns_nonzero():
 def test_handle_url_missing_key_id_returns_nonzero():
     """handle_url with no key_id segment must return non-zero."""
     import tourniquet.url_handler as uh
+
     rc = uh.handle_url("tourniquet://lift/")
     assert rc != 0

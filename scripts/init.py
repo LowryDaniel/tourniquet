@@ -36,6 +36,7 @@ TOURNIQUET_HOME = Path.home() / ".tourniquet"
 
 def _generate_fernet_key() -> str:
     from cryptography.fernet import Fernet
+
     return Fernet.generate_key().decode()
 
 
@@ -78,6 +79,7 @@ async def _create_schema() -> None:
     # Import lazily — settings won't load until .env has FERNET_KEY/SECRET_KEY
     from tourniquet.db import engine
     from tourniquet.models import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -128,8 +130,8 @@ def main() -> None:
     print()
     print("  1. Add your first key:")
     print("       export ANTHROPIC_API_KEY=sk-ant-...")
-    print('       python scripts/bootstrap_local.py --email you@example.com \\')
-    print('           --name claude-local --cap 5.00')
+    print("       python scripts/bootstrap_local.py --email you@example.com \\")
+    print("           --name claude-local --cap 5.00")
     print()
     print("  2. Start the proxy:")
     print("       python -m uvicorn tourniquet.main:app --host 127.0.0.1 --port 8787")

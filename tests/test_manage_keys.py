@@ -20,8 +20,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 # ── Parser tests ──────────────────────────────────────────────────────────────
 
+
 def test_parser_list():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["list"])
     assert args.command == "list"
@@ -29,6 +31,7 @@ def test_parser_list():
 
 def test_parser_show():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["show", "my-key"])
     assert args.command == "show"
@@ -37,6 +40,7 @@ def test_parser_show():
 
 def test_parser_update_defaults():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["update", "my-key"])
     assert args.command == "update"
@@ -49,17 +53,27 @@ def test_parser_update_defaults():
 
 def test_parser_update_all_flags():
     from manage_keys import _build_parser
+
     parser = _build_parser()
-    args = parser.parse_args([
-        "update", "my-key",
-        "--cap", "15.00",
-        "--currency", "GBP",
-        "--profile", "monitor",
-        "--kill-enabled",
-        "--auto-tune", "suggest",
-        "--alert-email", "me@example.com",
-        "--ceiling", "50.00",
-    ])
+    args = parser.parse_args(
+        [
+            "update",
+            "my-key",
+            "--cap",
+            "15.00",
+            "--currency",
+            "GBP",
+            "--profile",
+            "monitor",
+            "--kill-enabled",
+            "--auto-tune",
+            "suggest",
+            "--alert-email",
+            "me@example.com",
+            "--ceiling",
+            "50.00",
+        ]
+    )
     assert args.cap == 15.0
     assert args.currency == "GBP"
     assert args.profile == "monitor"
@@ -70,6 +84,7 @@ def test_parser_update_all_flags():
 
 def test_parser_update_kill_disabled():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["update", "my-key", "--kill-disabled"])
     assert args.kill_enabled is False
@@ -79,6 +94,7 @@ def test_parser_kill_mutex():
     """--kill-enabled and --kill-disabled are mutually exclusive."""
 
     from manage_keys import _build_parser
+
     parser = _build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["update", "my-key", "--kill-enabled", "--kill-disabled"])
@@ -86,6 +102,7 @@ def test_parser_kill_mutex():
 
 def test_parser_rotate():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["rotate", "abc12345"])
     assert args.command == "rotate"
@@ -94,6 +111,7 @@ def test_parser_rotate():
 
 def test_parser_delete():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["delete", "some-key"])
     assert args.command == "delete"
@@ -101,6 +119,7 @@ def test_parser_delete():
 
 def test_parser_suggest():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["suggest", "some-key"])
     assert args.command == "suggest"
@@ -108,6 +127,7 @@ def test_parser_suggest():
 
 def test_parser_stats():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     args = parser.parse_args(["stats", "some-key"])
     assert args.command == "stats"
@@ -115,6 +135,7 @@ def test_parser_stats():
 
 def test_parser_requires_command():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args([])
@@ -122,12 +143,14 @@ def test_parser_requires_command():
 
 def test_parser_auto_tune_choices():
     from manage_keys import _build_parser
+
     parser = _build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["update", "k", "--auto-tune", "invalid"])
 
 
 # ── Lookup helper tests (mocked DB) ──────────────────────────────────────────
+
 
 def _make_key(name: str, key_id: uuid.UUID | None = None) -> MagicMock:
     k = MagicMock()
@@ -139,6 +162,7 @@ def _make_key(name: str, key_id: uuid.UUID | None = None) -> MagicMock:
 @pytest.mark.asyncio
 async def test_lookup_by_exact_name(monkeypatch):
     from manage_keys import _lookup
+
     target = _make_key("my-key")
 
     mock_session = AsyncMock()
@@ -146,11 +170,13 @@ async def test_lookup_by_exact_name(monkeypatch):
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     # by_name returns one result; no UUID prefix matches
-    mock_session.execute = AsyncMock(side_effect=[
-        _make_execute_result([target]),   # exact name query
-        _make_execute_result([target]),   # all keys (for prefix check)
-        _make_execute_result_scalar(target),  # get(ApiKey, id) refresh
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            _make_execute_result([target]),  # exact name query
+            _make_execute_result([target]),  # all keys (for prefix check)
+            _make_execute_result_scalar(target),  # get(ApiKey, id) refresh
+        ]
+    )
     mock_session.get = AsyncMock(return_value=target)
     mock_session.refresh = AsyncMock()
 
@@ -168,10 +194,12 @@ async def test_lookup_no_match_exits(monkeypatch):
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     # both queries return empty
-    mock_session.execute = AsyncMock(side_effect=[
-        _make_execute_result([]),   # exact name
-        _make_execute_result([]),   # all keys
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            _make_execute_result([]),  # exact name
+            _make_execute_result([]),  # all keys
+        ]
+    )
 
     with (
         patch("manage_keys.get_session", return_value=mock_session),
@@ -193,10 +221,12 @@ async def test_lookup_ambiguous_exits(monkeypatch):
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     # name query returns two keys with same name-prefix (simulate ambiguity via both results)
-    mock_session.execute = AsyncMock(side_effect=[
-        _make_execute_result([k1, k2]),   # exact name matches 2
-        _make_execute_result([]),          # UUID prefix matches 0
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            _make_execute_result([k1, k2]),  # exact name matches 2
+            _make_execute_result([]),  # UUID prefix matches 0
+        ]
+    )
 
     with (
         patch("manage_keys.get_session", return_value=mock_session),
@@ -218,10 +248,12 @@ async def test_lookup_by_uuid_prefix(monkeypatch):
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session.execute = AsyncMock(side_effect=[
-        _make_execute_result([]),       # exact name: no match
-        _make_execute_result([target]), # all keys: prefix match
-    ])
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            _make_execute_result([]),  # exact name: no match
+            _make_execute_result([target]),  # all keys: prefix match
+        ]
+    )
     mock_session.get = AsyncMock(return_value=target)
     mock_session.refresh = AsyncMock()
 
@@ -232,8 +264,10 @@ async def test_lookup_by_uuid_prefix(monkeypatch):
 
 # ── Table formatter sanity check ──────────────────────────────────────────────
 
+
 def test_table_output():
     from manage_keys import _table
+
     rows = [["abc12345", "my-key", "$5.00", "$1.00", "standard", "yes", "off", "2025-01-01"]]
     headers = ["ID(short)", "Name", "Cap", "Spent today", "Profile", "Kill", "Auto-tune", "Created"]
     output = _table(rows, headers)
@@ -244,6 +278,7 @@ def test_table_output():
 
 def test_table_empty_rows():
     from manage_keys import _table
+
     rows = []
     headers = ["A", "B"]
     output = _table(rows, headers)
@@ -251,6 +286,7 @@ def test_table_empty_rows():
 
 
 # ── Helpers for mocking SQLAlchemy results ────────────────────────────────────
+
 
 def _make_execute_result(items):
     """Return a mock matching the SQLAlchemy execute() result for scalars().all()."""

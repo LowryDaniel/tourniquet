@@ -49,9 +49,7 @@ def test_unknown_model_logs_warning_once(caplog):
         cost_usd_cents("claude-mystery-1", 100, 100)
         cost_usd_cents("claude-mystery-1", 200, 200)
         cost_usd_cents("claude-mystery-1", 300, 300)
-    matching = [
-        r for r in caplog.records if "claude-mystery-1" in r.getMessage()
-    ]
+    matching = [r for r in caplog.records if "claude-mystery-1" in r.getMessage()]
     assert len(matching) == 1
 
 

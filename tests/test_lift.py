@@ -21,6 +21,7 @@ from tourniquet.proxy.router import _effective_cap
 
 # ── Model stubs ────────────────────────────────────────────────────────────────
 
+
 def _make_key(
     daily_cap: int = 500,
     absolute_ceiling: int = 2000,
@@ -36,6 +37,7 @@ def _make_key(
 
 
 # ── _effective_cap unit tests ──────────────────────────────────────────────────
+
 
 def test_effective_cap_no_lift():
     """Returns base cap when no lift is set."""
@@ -77,6 +79,7 @@ def test_effective_cap_expiry_but_no_amount():
 
 # ── HTTP endpoint tests ────────────────────────────────────────────────────────
 
+
 def _build_fake_db_key(
     daily_cap: int = 500,
     absolute_ceiling: int = 2000,
@@ -85,6 +88,7 @@ def _build_fake_db_key(
     import hashlib
 
     import bcrypt
+
     token_hash = bcrypt.hashpw(tq_token.encode(), bcrypt.gensalt()).decode()
     key = MagicMock()
     key.id = uuid.uuid4()
@@ -129,6 +133,7 @@ def _make_session_cm(fake_key: MagicMock):
 @pytest.fixture()
 def client():
     from tourniquet.main import app
+
     return TestClient(app, raise_server_exceptions=True)
 
 

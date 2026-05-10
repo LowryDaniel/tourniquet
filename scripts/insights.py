@@ -97,8 +97,12 @@ def _render_report(report: InsightReport, currency: str) -> None:
     print(f"{_BOLD}Insights — {report.api_key_name} — last {report.days} days{_RESET}")
     print(SEP)
     print()
-    print(f"  Total spent:      {_fmt(report.total_usd_cents, currency)}  ({report.request_count} requests)")
-    print(f"  Cap-hit days:     {report.cap_hit_days}   (vs {report.cap_hit_days_prior} the prior {report.days} days)")
+    print(
+        f"  Total spent:      {_fmt(report.total_usd_cents, currency)}  ({report.request_count} requests)"
+    )
+    print(
+        f"  Cap-hit days:     {report.cap_hit_days}   (vs {report.cap_hit_days_prior} the prior {report.days} days)"
+    )
     print()
 
     print(f"  {_BOLD}By model:{_RESET}")
@@ -117,11 +121,14 @@ def _render_report(report: InsightReport, currency: str) -> None:
 
     if report.hottest_hour:
         from tourniquet.analytics.insights import _WEEKDAY_NAMES
+
         h = report.hottest_hour
         wday = _WEEKDAY_NAMES[h.weekday]
         mult = f"{h.z_score:.0f}×" if h.z_score < 100 else "far above"
-        print(f"  Hottest hour: {wday} {h.hour:02d}:00–{h.hour+1:02d}:00 = "
-              f"{_fmt(h.cost_cents, currency)} ({mult} usual baseline)")
+        print(
+            f"  Hottest hour: {wday} {h.hour:02d}:00–{h.hour + 1:02d}:00 = "
+            f"{_fmt(h.cost_cents, currency)} ({mult} usual baseline)"
+        )
         print()
 
     if report.biggest_request:
@@ -129,8 +136,10 @@ def _render_report(report: InsightReport, currency: str) -> None:
         ts = r.created_at
         ts_str = ts.strftime("%a %H:%M") if ts and hasattr(ts, "strftime") else "unknown"
         print(f"  {_BOLD}Biggest single request:{_RESET}")
-        print(f"    {ts_str}  {r.input_tokens:>7,} input  {r.output_tokens:>6,} output  "
-              f"{_fmt(r.cost_usd_cents, currency)}")
+        print(
+            f"    {ts_str}  {r.input_tokens:>7,} input  {r.output_tokens:>6,} output  "
+            f"{_fmt(r.cost_usd_cents, currency)}"
+        )
         print(f"    model={r.model}")
         muid = getattr(r, "metadata_user_id", None)
         if muid:

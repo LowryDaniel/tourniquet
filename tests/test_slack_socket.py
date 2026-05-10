@@ -58,6 +58,7 @@ async def test_handle_interactive_routes_lift_by_amount():
     # Slack handler now calls admin._apply_lift_by_amount directly with source="slack_socket"
     # so the audit log records who triggered the action.
     import uuid as _uuid
+
     mock_bump.assert_awaited_once_with(
         _uuid.UUID("11111111-1111-1111-1111-111111111111"),
         500,
@@ -71,9 +72,7 @@ async def test_handle_interactive_routes_kill_then_fires_recovery():
     c = SlackSocketClient()
     c._http = AsyncMock()
     payload = {
-        "actions": [
-            {"action_id": "kill_now", "value": "11111111-1111-1111-1111-111111111111"}
-        ],
+        "actions": [{"action_id": "kill_now", "value": "11111111-1111-1111-1111-111111111111"}],
         "channel": {"id": "C123"},
         "message": {"ts": "1234.5"},
         "response_url": "https://hooks.slack.com/actions/...",
@@ -124,6 +123,7 @@ async def test_handle_interactive_routes_lift_mode():
     ):
         await c._handle_interactive(payload)
     import uuid as _uuid
+
     mock_lift.assert_awaited_once_with(
         _uuid.UUID("11111111-1111-1111-1111-111111111111"),
         "2x",
@@ -145,9 +145,12 @@ async def test_send_slack_uses_bot_post_when_fully_configured(monkeypatch):
     from tourniquet.alerts.slack import send_slack
 
     event = AlertEvent(
-        api_key_name="test", threshold_pct=80,
-        spent_usd_cents=400, cap_usd_cents=500,
-        display_currency="USD", today=date(2026, 5, 7),
+        api_key_name="test",
+        threshold_pct=80,
+        spent_usd_cents=400,
+        cap_usd_cents=500,
+        display_currency="USD",
+        today=date(2026, 5, 7),
         api_key_id="abcd-1234",
     )
     with respx.mock(assert_all_called=False) as mock:
@@ -161,7 +164,9 @@ async def test_send_slack_uses_bot_post_when_fully_configured(monkeypatch):
             patch("tourniquet.config.settings.slack_app_token", "xapp-1-foo"),
             patch("tourniquet.config.settings.slack_bot_token", "xoxb-bar"),
             patch("tourniquet.config.settings.slack_channel_id", "C1"),
-            patch("tourniquet.config.settings.slack_webhook_url", "https://hooks.slack.com/webhook"),
+            patch(
+                "tourniquet.config.settings.slack_webhook_url", "https://hooks.slack.com/webhook"
+            ),
         ):
             await send_slack("hello", event)
 
@@ -191,21 +196,28 @@ async def test_send_slack_falls_back_to_webhook_when_bot_partially_configured(mo
     from tourniquet.alerts.slack import send_slack
 
     event = AlertEvent(
-        api_key_name="test", threshold_pct=80,
-        spent_usd_cents=400, cap_usd_cents=500,
-        display_currency="USD", today=date(2026, 5, 7),
+        api_key_name="test",
+        threshold_pct=80,
+        spent_usd_cents=400,
+        cap_usd_cents=500,
+        display_currency="USD",
+        today=date(2026, 5, 7),
         api_key_id="abcd-1234",
     )
     with respx.mock(assert_all_called=False) as mock:
         bot_route = mock.post("https://slack.com/api/chat.postMessage").mock(
             return_value=Response(200, json={"ok": True})
         )
-        webhook_route = mock.post("https://hooks.slack.com/webhook").mock(return_value=Response(200))
+        webhook_route = mock.post("https://hooks.slack.com/webhook").mock(
+            return_value=Response(200)
+        )
         with (
             patch("tourniquet.config.settings.slack_app_token", "xapp-1-foo"),
             patch("tourniquet.config.settings.slack_bot_token", ""),  # missing!
             patch("tourniquet.config.settings.slack_channel_id", ""),  # missing!
-            patch("tourniquet.config.settings.slack_webhook_url", "https://hooks.slack.com/webhook"),
+            patch(
+                "tourniquet.config.settings.slack_webhook_url", "https://hooks.slack.com/webhook"
+            ),
         ):
             await send_slack("hello", event)
 

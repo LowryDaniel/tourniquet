@@ -41,6 +41,7 @@ def cap_hit_event() -> AlertEvent:
 
 # ── _format_message ────────────────────────────────────────────────────────────
 
+
 def test_format_message_threshold(base_event: AlertEvent) -> None:
     msg = _format_message(base_event)
     assert "80%" in msg
@@ -57,6 +58,7 @@ def test_format_message_cap_hit(cap_hit_event: AlertEvent) -> None:
 
 
 # ── JSONL always written ───────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_fanout_writes_jsonl_even_with_no_channels(
@@ -84,6 +86,7 @@ async def test_fanout_writes_jsonl_even_with_no_channels(
 
 
 # ── Only configured channels called ───────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -114,6 +117,7 @@ async def test_fanout_only_calls_configured_channels(
 
 
 # ── Slack / Telegram failures don't propagate ─────────────────────────────────
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -146,9 +150,7 @@ async def test_telegram_failure_returned_not_raised(
 ) -> None:
     monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
 
-    respx.post("https://api.telegram.org/bot123/sendMessage").mock(
-        side_effect=Exception("timeout")
-    )
+    respx.post("https://api.telegram.org/bot123/sendMessage").mock(side_effect=Exception("timeout"))
 
     with (
         patch("tourniquet.config.settings.slack_webhook_url", ""),
@@ -165,6 +167,7 @@ async def test_telegram_failure_returned_not_raised(
 
 
 # ── Mac notification skipped on non-Darwin (osascript path) ──────────────────
+
 
 @pytest.mark.asyncio
 async def test_mac_notification_skipped_osascript_on_non_darwin(
@@ -186,6 +189,7 @@ async def test_mac_notification_skipped_osascript_on_non_darwin(
     ):
         # mac alias still works
         from tourniquet.alerts.desktop import send_mac_notification
+
         await send_mac_notification("Test", "body")
 
     # osascript subprocess must NOT be called on linux
@@ -193,6 +197,7 @@ async def test_mac_notification_skipped_osascript_on_non_darwin(
 
 
 # ── Win32 plyer path taken ────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_desktop_notification_uses_plyer_on_win32() -> None:
@@ -209,6 +214,7 @@ async def test_desktop_notification_uses_plyer_on_win32() -> None:
         from importlib import reload
 
         import tourniquet.alerts.desktop as desktop_mod
+
         reload(desktop_mod)
         await desktop_mod.send_desktop_notification("T", "M")
 
@@ -219,9 +225,11 @@ async def test_desktop_notification_uses_plyer_on_win32() -> None:
 
 # ── Plyer not installed → silent no-op ───────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_desktop_notification_no_op_when_plyer_missing() -> None:
     import builtins
+
     real_import = builtins.__import__
 
     def _fake_import(name: str, *args: object, **kwargs: object) -> object:
@@ -238,12 +246,14 @@ async def test_desktop_notification_no_op_when_plyer_missing() -> None:
         from importlib import reload
 
         import tourniquet.alerts.desktop as desktop_mod
+
         reload(desktop_mod)
         # Must not raise
         await desktop_mod.send_desktop_notification("T", "M")
 
 
 # ── kill_now_url in AlertEvent ────────────────────────────────────────────────
+
 
 def test_kill_now_url_included_when_kill_disabled():
     """fan_out with kill_enabled=False must attach a kill_now_url to the event."""
@@ -324,6 +334,7 @@ def test_format_message_no_kill_hint_without_url():
 
 
 # ── Email channel: skipped when no creds, called when configured ──────────────
+
 
 @pytest.mark.asyncio
 async def test_email_reports_skipped_when_no_creds(
@@ -409,6 +420,7 @@ async def test_email_uses_per_key_alert_email_when_set(
 
 # ── Webhook URL never appears in logs ─────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_webhook_url_not_in_logs(
@@ -423,6 +435,7 @@ async def test_webhook_url_not_in_logs(
     respx.post(secret_url).mock(return_value=Response(500, text="fail"))
 
     import logging
+
     with (
         caplog.at_level(logging.WARNING, logger="tourniquet.alerts.slack"),
         patch("tourniquet.config.settings.slack_webhook_url", secret_url),
@@ -444,49 +457,59 @@ async def test_webhook_url_not_in_logs(
 # Each level (50%, 80%, cap-hit) fires AT MOST ONCE per day. The proxy hot path
 # uses this to decide whether to alert after each request.
 
+
 class TestSelectThreshold:
     def test_below_50_percent_no_alert(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         assert _select_threshold(spent_cents=200, cap_cents=500, last_fired_pct=None) is None
 
     def test_crossing_50_fires_50(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         # 250/500 = 50%
         assert _select_threshold(250, 500, None) == 50
 
     def test_crossing_80_fires_80_when_50_already_fired(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         # 400/500 = 80% — last was 50, so fire 80
         assert _select_threshold(400, 500, 50) == 80
 
     def test_50_does_not_refire_when_50_already_fired(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         # 300/500 = 60% — last was 50, so 50 is "done"; haven't hit 80 yet
         assert _select_threshold(300, 500, 50) is None
 
     def test_cap_hit_fires_minus_one(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         assert _select_threshold(500, 500, 80) == -1
         assert _select_threshold(600, 500, 80) == -1  # over-cap also fires -1
 
     def test_cap_hit_does_not_refire(self):
         from tourniquet.alerts.notifier import _select_threshold
+
         assert _select_threshold(700, 500, -1) is None
 
     def test_crossing_directly_to_cap_skips_50_80(self):
         """A single big request can take you from 0 → cap. Cap-hit fires immediately."""
         from tourniquet.alerts.notifier import _select_threshold
+
         assert _select_threshold(500, 500, None) == -1
 
     def test_zero_cap_no_alert(self):
         """Defensive: if cap is somehow 0, don't divide-by-zero or fire."""
         from tourniquet.alerts.notifier import _select_threshold
+
         assert _select_threshold(100, 0, None) is None
 
 
 # ── maybe_fire_threshold_alert — integration with fake session ────────────────
 # Verifies the helper records an audit row before dispatching, and returns the
 # fired level so callers (or tests) can confirm what happened.
+
 
 @pytest.mark.asyncio
 async def test_maybe_fire_threshold_alert_records_audit_and_dispatches():
@@ -558,8 +581,12 @@ async def test_maybe_fire_threshold_alert_no_op_when_already_fired():
 
     with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
         threshold = await maybe_fire_threshold_alert(
-            api_key, 410, 500, _date(2026, 5, 8),
-            kill_enabled=True, session=session,
+            api_key,
+            410,
+            500,
+            _date(2026, 5, 8),
+            kill_enabled=True,
+            session=session,
         )
         await asyncio.sleep(0)
 
@@ -590,8 +617,12 @@ async def test_maybe_fire_threshold_alert_cap_hit_with_kill_offers_recovery():
 
     with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
         threshold = await maybe_fire_threshold_alert(
-            api_key, 500, 500, _date(2026, 5, 8),
-            kill_enabled=True, session=session,
+            api_key,
+            500,
+            500,
+            _date(2026, 5, 8),
+            kill_enabled=True,
+            session=session,
         )
         await asyncio.sleep(0)
 
@@ -681,8 +712,12 @@ async def test_maybe_fire_threshold_alert_monitor_mode_no_recovery():
 
     with patch("tourniquet.alerts.notifier.fan_out", new_callable=AsyncMock) as mock_fanout:
         await maybe_fire_threshold_alert(
-            api_key, 500, 500, _date(2026, 5, 8),
-            kill_enabled=False, session=session,
+            api_key,
+            500,
+            500,
+            _date(2026, 5, 8),
+            kill_enabled=False,
+            session=session,
         )
         await asyncio.sleep(0)
 

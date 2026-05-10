@@ -30,6 +30,7 @@ from tourniquet.models import User
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
+
 router = APIRouter(prefix="/auth")
 
 _signer = URLSafeTimedSerializer(settings.secret_key, salt="magic-link")
@@ -75,15 +76,17 @@ async def send_magic_link(request: Request, email: str = Form(...)) -> HTMLRespo
 
     if settings.resend_api_key:
         resend.api_key = settings.resend_api_key
-        resend.Emails.send({
-            "from": settings.resend_from_email,
-            "to": [email],
-            "subject": "Sign in to Tourniquet",
-            "html": (
-                f'<p>Click to sign in (expires in 15 minutes):</p>'
-                f'<p><a href="{link}">{link}</a></p>'
-            ),
-        })
+        resend.Emails.send(
+            {
+                "from": settings.resend_from_email,
+                "to": [email],
+                "subject": "Sign in to Tourniquet",
+                "html": (
+                    f"<p>Click to sign in (expires in 15 minutes):</p>"
+                    f'<p><a href="{link}">{link}</a></p>'
+                ),
+            }
+        )
 
     return HTMLResponse("<p>Check your email for the sign-in link.</p>")
 

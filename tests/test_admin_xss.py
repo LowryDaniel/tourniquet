@@ -77,6 +77,7 @@ def _assert_escaped(body: str) -> None:
 
 # ── kill-now ──────────────────────────────────────────────────────────────────
 
+
 def test_kill_now_confirm_escapes_key_name(client):
     key = _xss_key()
     key_id = key.id
@@ -118,6 +119,7 @@ def test_kill_now_applied_escapes_key_name(client):
 
 # ── lift-mode ─────────────────────────────────────────────────────────────────
 
+
 def test_lift_mode_confirm_escapes_key_name(client):
     key = _xss_key()
     key_id = key.id
@@ -149,6 +151,7 @@ def test_lift_mode_applied_escapes_key_name(client):
 
 # ── lift-by-amount ────────────────────────────────────────────────────────────
 
+
 def test_lift_by_amount_confirm_escapes_key_name(client):
     key = _xss_key()
     key_id = key.id
@@ -157,9 +160,7 @@ def test_lift_by_amount_confirm_escapes_key_name(client):
     token = url.split("token=")[1].split("&")[0]
 
     with patch("tourniquet.routes.admin.get_session", _session_returning(key)):
-        resp = client.get(
-            f"/admin/lift-by-amount/{key_id}?token={token}&amount={amount}"
-        )
+        resp = client.get(f"/admin/lift-by-amount/{key_id}?token={token}&amount={amount}")
 
     assert resp.status_code == 200
     _assert_escaped(resp.text)

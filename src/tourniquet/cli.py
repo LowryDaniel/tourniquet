@@ -32,8 +32,10 @@ from tourniquet import __version__
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _generate_fernet_key() -> str:
     from cryptography.fernet import Fernet
+
     return Fernet.generate_key().decode()
 
 
@@ -59,9 +61,7 @@ def _lookup_key_by_name(name: str) -> Any:
 
     async def _run() -> Any:
         async with get_session() as s:
-            return (
-                await s.execute(select(ApiKey).where(ApiKey.name == name))
-            ).scalar_one_or_none()
+            return (await s.execute(select(ApiKey).where(ApiKey.name == name))).scalar_one_or_none()
 
     try:
         return _asyncio.run(_run())
@@ -106,9 +106,7 @@ def _init_config_dir(config_dir: Path) -> None:
         if example is None:
             # Minimal fallback — just the required vars
             env_path.write_text(
-                "DATABASE_URL=sqlite+aiosqlite:///./tourniquet_dev.db\n"
-                "FERNET_KEY=\n"
-                "SECRET_KEY=\n"
+                "DATABASE_URL=sqlite+aiosqlite:///./tourniquet_dev.db\nFERNET_KEY=\nSECRET_KEY=\n"
             )
         else:
             env_path.write_text(example.read_text(encoding="utf-8"))
@@ -129,6 +127,7 @@ def _init_config_dir(config_dir: Path) -> None:
 
 # ── Subcommand handlers ────────────────────────────────────────────────────────
 
+
 def cmd_start(args: argparse.Namespace) -> None:
     config_dir = Path(args.config_dir).expanduser().resolve()
     port: int = args.port
@@ -146,13 +145,17 @@ def cmd_start(args: argparse.Namespace) -> None:
     print("  Press Ctrl+C to stop\n")
 
     if not args.no_browser:
+
         def _open() -> None:
             import time
+
             time.sleep(1.5)
             webbrowser.open(url)
+
         threading.Thread(target=_open, daemon=True).start()
 
     import uvicorn
+
     uvicorn.run("tourniquet.main:app", host="127.0.0.1", port=port, log_level="info")
 
 
@@ -256,12 +259,14 @@ def cmd_status(_args: argparse.Namespace) -> None:
 def cmd_register_url_handler(_args: argparse.Namespace) -> None:
     """Register tourniquet:// as a system URL scheme."""
     from tourniquet.url_handler import register
+
     register()
 
 
 def cmd_handle_url(args: argparse.Namespace) -> None:
     """Parse and dispatch a tourniquet:// URL."""
     from tourniquet.url_handler import handle_url
+
     rc = handle_url(args.url)
     sys.exit(rc)
 
@@ -366,6 +371,7 @@ def cmd_test(args: argparse.Namespace) -> None:
         from tourniquet.billing.formatting import format_money
         from tourniquet.billing.pricing import cost_usd_cents
         from tourniquet.config import settings
+
         cost_cents = cost_usd_cents(model, in_tokens, out_tokens)
         cost_str = format_money(cost_cents, settings.display_currency)
     except Exception:
@@ -383,8 +389,7 @@ def cmd_test(args: argparse.Namespace) -> None:
     print()
     print(f"  {BOLD}Tokens{RESET}       {in_tokens} in  /  {out_tokens} out")
     print(
-        f"  {BOLD}Cost{RESET}         {cost_str}  "
-        f"{DIM}(billed against your tq_ key's cap){RESET}"
+        f"  {BOLD}Cost{RESET}         {cost_str}  {DIM}(billed against your tq_ key's cap){RESET}"
     )
     print(bar)
     print(f"  {DIM}Open the dashboard to see this request in the live spend bar:{RESET}")
@@ -420,7 +425,7 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
         cap_cents = real_key.daily_cap_usd_cents or 100
         api_key_id = str(real_key.id)
         api_key_name = f"[TEST] {real_key.name}"
-        bind_note = f"bound to real key '{real_key.name}' (cap ${cap_cents/100:.2f})"
+        bind_note = f"bound to real key '{real_key.name}' (cap ${cap_cents / 100:.2f})"
     else:
         cap_cents = 500
         api_key_id = "00000000-0000-0000-0000-000000000000"
@@ -530,9 +535,7 @@ def cmd_lift(args: argparse.Namespace) -> None:
 
     async def _run() -> None:
         async with get_session() as session:
-            result = await session.execute(
-                select(ApiKey).where(ApiKey.name == args.key)
-            )
+            result = await session.execute(select(ApiKey).where(ApiKey.name == args.key))
             key = result.scalar_one_or_none()
             if not key:
                 print(f"ERROR: no key named {args.key!r}", file=sys.stderr)
@@ -552,6 +555,7 @@ def cmd_lift(args: argparse.Namespace) -> None:
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     # Windows: force UTF-8 on stdout so banner characters don't crash cmd.exe

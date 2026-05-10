@@ -86,11 +86,16 @@ async def _apply_lift_by_amount_from_callback(key_id: str, cents: int) -> None:
 
     try:
         name, new_lifted, ceiling_clamped = await _apply_lift_by_amount(
-            key_uuid, cents, source="telegram_poll",
+            key_uuid,
+            cents,
+            source="telegram_poll",
         )
         log.info(
             "Telegram lift_by_amount: bumped %s by %d cents → cap %d cents%s",
-            name, cents, new_lifted, " (ceiling-clamped)" if ceiling_clamped else "",
+            name,
+            cents,
+            new_lifted,
+            " (ceiling-clamped)" if ceiling_clamped else "",
         )
     except Exception as exc:
         log.warning("Telegram lift_by_amount callback failed for key %r: %s", key_id, exc)
@@ -103,6 +108,7 @@ async def _fire_recovery_alert_for(key_id: str) -> None:
     except ValueError:
         return
     from tourniquet.routes.admin import _fire_recovery_alert
+
     try:
         async with get_session() as session:
             key = await session.get(ApiKey, key_uuid)

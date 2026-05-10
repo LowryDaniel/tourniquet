@@ -37,13 +37,13 @@ _pending_tasks: set[asyncio.Task[Any]] = set()
 @dataclasses.dataclass
 class AlertEvent:
     api_key_name: str
-    threshold_pct: int        # 50 / 80 / 100 / -1 for "cap-hit"
+    threshold_pct: int  # 50 / 80 / 100 / -1 for "cap-hit"
     spent_usd_cents: int
     cap_usd_cents: int
-    display_currency: str     # for format_money
+    display_currency: str  # for format_money
     today: date
-    api_key_id: str = ""      # UUID string — used for Telegram lift buttons
-    kill_now_url: str | None = None   # signed magic-link; set when kill_enabled=False
+    api_key_id: str = ""  # UUID string — used for Telegram lift buttons
+    kill_now_url: str | None = None  # signed magic-link; set when kill_enabled=False
     # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
     alert_email: str | None = None
     # True when this alert is a "killed, want to bump?" recovery prompt
@@ -53,6 +53,7 @@ class AlertEvent:
 def _build_kill_now_url(key_id: str) -> str:
     """Return a signed 24h-expiry kill-now URL."""
     from itsdangerous import URLSafeTimedSerializer
+
     s = URLSafeTimedSerializer(settings.secret_key, salt="kill-now")
     token = s.dumps(key_id)
     return f"{settings.app_base_url}/admin/kill-now/{key_id}?token={token}"
@@ -65,11 +66,11 @@ def _build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     amount. Each amount option = different signed link.
     """
     from itsdangerous import URLSafeTimedSerializer
+
     s = URLSafeTimedSerializer(settings.secret_key, salt="lift-by-amount")
     token = s.dumps([key_id, amount_cents])
     return (
-        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
-        f"?token={token}&amount={amount_cents}"
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
     )
 
 
@@ -79,11 +80,11 @@ def recovery_amounts_cents(cap_cents: int) -> list[int]:
     Scales with cap magnitude — a $5 cap offers +$1/+$5/+$10; a $1000 cap
     offers +$25/+$100/+$500. Same scaling logic as the dashboard nudge buttons.
     """
-    if cap_cents <= 1000:        # ≤ $10
-        return [100, 500, 1000]    # +$1   +$5   +$10
-    if cap_cents <= 10000:       # ≤ $100
+    if cap_cents <= 1000:  # ≤ $10
+        return [100, 500, 1000]  # +$1   +$5   +$10
+    if cap_cents <= 10000:  # ≤ $100
         return [500, 2500, 10000]  # +$5   +$25  +$100
-    if cap_cents <= 100000:      # ≤ $1000
+    if cap_cents <= 100000:  # ≤ $1000
         return [2500, 10000, 50000]
     return [10000, 50000, 100000]
 
@@ -117,10 +118,7 @@ def _format_message(event: AlertEvent) -> str:
             f"{spent}/{cap} today. Requests blocked."
         )
 
-    return (
-        f"⚠️ Tourniquet: {event.api_key_name} — at {event.threshold_pct}%. "
-        f"{spent}/{cap} today."
-    )
+    return f"⚠️ Tourniquet: {event.api_key_name} — at {event.threshold_pct}%. {spent}/{cap} today."
 
 
 def _select_threshold(spent_cents: int, cap_cents: int, last_fired_pct: int | None) -> int | None:
@@ -229,8 +227,12 @@ async def maybe_fire_threshold_alert(
         # The proxy commits this audit row alongside the spend write, so they
         # land atomically.
         from tourniquet.audit import ACTION_ALERT_FIRED, SOURCE_PROXY, record_action
+
         await record_action(
-            session, api_key.id, ACTION_ALERT_FIRED, SOURCE_PROXY,
+            session,
+            api_key.id,
+            ACTION_ALERT_FIRED,
+            SOURCE_PROXY,
             f"Alert fired at {'cap-hit' if threshold == -1 else f'{threshold}%'} "
             f"(spent ${spent_cents / 100:.2f} / ${cap_cents / 100:.2f})",
             details={
@@ -351,9 +353,7 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
             coroutines.append(
                 _run(
                     "telegram",
-                    send_telegram_with_lift_buttons(
-                        message, event.api_key_id, event.kill_now_url
-                    ),
+                    send_telegram_with_lift_buttons(message, event.api_key_id, event.kill_now_url),
                 )
             )
         else:

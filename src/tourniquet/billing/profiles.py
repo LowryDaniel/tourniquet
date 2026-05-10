@@ -20,9 +20,9 @@ from dataclasses import dataclass
 class Profile:
     name: str
     default_kill_enabled: bool
-    alert_thresholds: list[int]   # percentages of cap that fire alerts
-    description: str              # one-sentence pitch shown in the UI
-    pick_me_if: str               # plain-English hint shown in dropdown help
+    alert_thresholds: list[int]  # percentages of cap that fire alerts
+    description: str  # one-sentence pitch shown in the UI
+    pick_me_if: str  # plain-English hint shown in dropdown help
 
 
 PROFILES: dict[str, Profile] = {

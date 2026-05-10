@@ -42,7 +42,7 @@ async def test_happy_path_returns_sorted_daily_costs():
 
     assert len(results) == 3
     assert results[0].date == day1
-    assert results[0].usd_cents == 25   # $0.25 = 25 cents
+    assert results[0].usd_cents == 25  # $0.25 = 25 cents
     assert results[1].usd_cents == 200  # $2.00 = 200 cents
     assert results[2].usd_cents == 150  # $1.50 = 150 cents
     assert results[2].request_count == 10

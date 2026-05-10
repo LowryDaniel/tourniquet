@@ -43,6 +43,7 @@ def _ssl_context() -> ssl.SSLContext:
     """
     return ssl.create_default_context(cafile=certifi.where())
 
+
 log = logging.getLogger(__name__)
 
 
@@ -71,8 +72,7 @@ class SlackSocketClient:
         # Socket Mode WebSocket would idle without ever receiving an interaction
         # — pointless. Stay dormant until full config is present.
         if not (
-            getattr(settings, "slack_bot_token", "")
-            and getattr(settings, "slack_channel_id", "")
+            getattr(settings, "slack_bot_token", "") and getattr(settings, "slack_channel_id", "")
         ):
             log.info(
                 "Slack Socket Mode dormant — SLACK_APP_TOKEN set but SLACK_BOT_TOKEN / "
@@ -203,7 +203,9 @@ class SlackSocketClient:
                     confirmation = "Left alone."
                 else:
                     await _apply_lift_by_amount(
-                        _uuid_mod_inner.UUID(key_id), cents, source="slack_socket",
+                        _uuid_mod_inner.UUID(key_id),
+                        cents,
+                        source="slack_socket",
                     )
                     confirmation = await _summary_after_bump(key_id, cents)
             elif action_id == "kill_now":
@@ -215,7 +217,9 @@ class SlackSocketClient:
                 # value: "<key_id>|<mode>"
                 key_id, mode = value.split("|", 1)
                 await _apply_lift(
-                    _uuid_mod_inner.UUID(key_id), mode, source="slack_socket",
+                    _uuid_mod_inner.UUID(key_id),
+                    mode,
+                    source="slack_socket",
                 )
                 confirmation = await _summary_after_lift(key_id, mode)
         except Exception as exc:
@@ -260,6 +264,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
 
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
+
     async with get_session() as s:
         k = (await s.execute(select(ApiKey).where(ApiKey.id == key_uuid))).scalar_one_or_none()
         if not k:
@@ -277,6 +282,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
 
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
+
     async with get_session() as s:
         k = (await s.execute(select(ApiKey).where(ApiKey.id == key_uuid))).scalar_one_or_none()
         if not k:

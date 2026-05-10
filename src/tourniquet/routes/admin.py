@@ -130,8 +130,7 @@ def build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     """
     token = _lift_by_amount_signer().dumps([key_id, amount_cents])
     return (
-        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
-        f"?token={token}&amount={amount_cents}"
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
     )
 
 
@@ -178,9 +177,7 @@ async def _apply_lift_by_amount(
         key.lift_expires_at = expires_at
 
         amt_label = (
-            f"${amount_cents // 100}"
-            if amount_cents % 100 == 0
-            else f"${amount_cents / 100:.2f}"
+            f"${amount_cents // 100}" if amount_cents % 100 == 0 else f"${amount_cents / 100:.2f}"
         )
         summary = (
             f"+{amt_label} bump via {source} — cap now ${new_lifted / 100:.2f} until midnight UTC"
@@ -195,7 +192,11 @@ async def _apply_lift_by_amount(
         if token_sig is not None:
             action_details["token_sig"] = token_sig
         await record_action(
-            session, key.id, ACTION_LIFT_BY_AMOUNT, source, summary,
+            session,
+            key.id,
+            ACTION_LIFT_BY_AMOUNT,
+            source,
+            summary,
             details=action_details,
         )
         await session.commit()
@@ -256,16 +257,13 @@ async def _apply_kill_now(
         # quota survives the kill and is restored automatically at midnight UTC.
 
         already_floored = previous_effective <= new_lifted
-        summary = (
-            f"Kill via {source} — "
-            + (
-                f"effective cap already at floor (${previous_effective / 100:.2f}); "
-                "lift refreshed until midnight UTC, daily_cap preserved at "
-                f"${key.daily_cap_usd_cents / 100:.2f}"
-                if already_floored
-                else f"lifted_cap clamped to ${new_lifted / 100:.2f} until midnight UTC; "
-                f"daily_cap preserved at ${key.daily_cap_usd_cents / 100:.2f}"
-            )
+        summary = f"Kill via {source} — " + (
+            f"effective cap already at floor (${previous_effective / 100:.2f}); "
+            "lift refreshed until midnight UTC, daily_cap preserved at "
+            f"${key.daily_cap_usd_cents / 100:.2f}"
+            if already_floored
+            else f"lifted_cap clamped to ${new_lifted / 100:.2f} until midnight UTC; "
+            f"daily_cap preserved at ${key.daily_cap_usd_cents / 100:.2f}"
         )
         kill_details: dict[str, Any] = {
             "lifted_before_cents": previous_lifted,
@@ -278,7 +276,11 @@ async def _apply_kill_now(
         if token_sig is not None:
             kill_details["token_sig"] = token_sig
         await record_action(
-            session, key.id, ACTION_KILL_NOW, source, summary,
+            session,
+            key.id,
+            ACTION_KILL_NOW,
+            source,
+            summary,
             details=kill_details,
         )
         await session.commit()
@@ -318,7 +320,10 @@ async def _apply_lift(
 
         if mode == "ignore":
             await record_action(
-                session, key.id, ACTION_LIFT_MODE, source,
+                session,
+                key.id,
+                ACTION_LIFT_MODE,
+                source,
                 f"Ignored alert via {source} — no cap change",
                 details={"mode": "ignore"},
             )
@@ -349,7 +354,11 @@ async def _apply_lift(
         if token_sig is not None:
             lift_mode_details["token_sig"] = token_sig
         await record_action(
-            session, key.id, ACTION_LIFT_MODE, source, summary,
+            session,
+            key.id,
+            ACTION_LIFT_MODE,
+            source,
+            summary,
             details=lift_mode_details,
         )
         await session.commit()
@@ -357,6 +366,7 @@ async def _apply_lift(
 
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
+
 
 class LiftRequest(BaseModel):
     key_id: str = Field(..., description="UUID or key name")
@@ -388,6 +398,7 @@ class UnliftResponse(BaseModel):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 async def _resolve_and_auth(token: str, key_identifier: str, session: AsyncSession) -> ApiKey:
     """Resolve token to ApiKey and verify it matches the requested key_identifier.
@@ -442,7 +453,7 @@ def _compute_expiry(
         # Next midnight UTC — users in other timezones see their lift expire at whatever
         # local time corresponds to UTC midnight. This is intentional: the daily spend
         # resets at midnight UTC, so the lift is coterminous with the spend period.
-        tomorrow = (now.date() + timedelta(days=1))
+        tomorrow = now.date() + timedelta(days=1)
         return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     if duration_mode == "for_hours":
@@ -498,6 +509,7 @@ def _compute_lift_cap(
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
 
 @router.post("/lift", response_model=LiftResponse)
 async def lift_cap(request: Request, payload: LiftRequest) -> LiftResponse:
@@ -578,6 +590,7 @@ async def unlift_cap(request: Request, payload: LiftRequest) -> UnliftResponse:
 
 # ── Kill-now magic-link endpoints ──────────────────────────────────────────────
 
+
 @router.get("/kill-now/{key_id}")
 async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> HTMLResponse:
     """Magic-link confirmation page. Verifies the token, then shows a confirm button."""
@@ -649,6 +662,7 @@ async def kill_now_apply(
 
     # Inline recovery buttons on the success page so user can act without leaving the browser
     from tourniquet.alerts.notifier import recovery_amounts_cents
+
     bumps_cents = recovery_amounts_cents(new_cap)
     bumps = [
         {
@@ -698,6 +712,7 @@ async def _fire_recovery_alert(key_id: uuid.UUID, key_name: str, new_cap_cents: 
 
 
 # ── /admin/lift-mode/{key_id} ─────────────────────────────────────────────────
+
 
 @router.get("/lift-mode/{key_id}")
 async def lift_mode_confirm(
@@ -785,6 +800,7 @@ async def lift_mode_apply(
         key_name = key.name
 
         from tourniquet.audit import ACTION_LIFT_MODE, record_action
+
         lift_mode_details: dict[str, Any] = {
             "mode": mode,
             "lifted_before_cents": lifted_before,
@@ -820,6 +836,7 @@ async def lift_mode_apply(
 
 
 # ── /admin/lift-by-amount/{key_id} ────────────────────────────────────────────
+
 
 @router.get("/lift-by-amount/{key_id}")
 async def lift_by_amount_confirm(

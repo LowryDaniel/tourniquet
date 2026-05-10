@@ -17,6 +17,7 @@ from tourniquet.billing.suggestions import (
 # suggest_from_history
 # ---------------------------------------------------------------------------
 
+
 def test_suggest_basic_history():
     """[200, 100, 250, 300, 50, 0, 180] → reasonable cap suggestion."""
     daily = [200, 100, 250, 300, 50, 0, 180]
@@ -34,7 +35,7 @@ def test_suggest_basic_history():
     # suggested_cap = ceil(300 * 1.5) = 450
     assert result.p95_usd_cents == 300
     assert result.suggested_cap_usd_cents == 450
-    assert result.soft_alert_50_usd_cents == math.ceil(450 * 0.5)   # 225
+    assert result.soft_alert_50_usd_cents == math.ceil(450 * 0.5)  # 225
     assert result.soft_throttle_80_usd_cents == math.ceil(450 * 0.8)  # 360
     assert result.capped_by_ceiling is False
     assert result.max_usd_cents == 300
@@ -104,6 +105,7 @@ def test_suggest_alerts_proportional_to_capped_cap():
 # should_creep_up
 # ---------------------------------------------------------------------------
 
+
 def test_creep_up_heavy_use_bumps_cap():
     """Rolling avg = 70% of cap, ceiling far away → returns (True, cap × 1.2)."""
     cap = 1000
@@ -131,7 +133,7 @@ def test_creep_up_clamped_to_ceiling():
     """Rolling avg = 90%, but cap × 1.2 > ceiling → returns (True, ceiling)."""
     cap = 1000
     rolling_avg = 900  # 90% of 1000 — above threshold
-    ceiling = 1100     # cap * 1.2 = 1200 > 1100
+    ceiling = 1100  # cap * 1.2 = 1200 > 1100
 
     should_bump, new_cap = should_creep_up(rolling_avg, cap, ceiling)
 
@@ -143,7 +145,7 @@ def test_creep_up_exactly_at_ceiling_no_bump_needed():
     """Cap already at ceiling: bump would be clipped to ceiling (no-op in effect)."""
     cap = 1000
     rolling_avg = 700  # above threshold
-    ceiling = 1000     # already at ceiling
+    ceiling = 1000  # already at ceiling
 
     should_bump, new_cap = should_creep_up(rolling_avg, cap, ceiling)
 

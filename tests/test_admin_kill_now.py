@@ -14,6 +14,7 @@ from tourniquet.routes.admin import build_kill_now_url, router
 
 # ── Token signing / verification ───────────────────────────────────────────────
 
+
 def test_build_kill_now_url_contains_key_id():
     key_id = str(uuid.uuid4())
     url = build_kill_now_url(key_id)
@@ -63,8 +64,10 @@ def test_wrong_salt_rejected():
 
 # ── GET /admin/kill-now/{key_id} — confirm page ────────────────────────────────
 
+
 def _make_app():
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(router)
     return app
@@ -126,6 +129,7 @@ def test_get_kill_now_mismatched_key_returns_400(client):
 
 # ── POST /admin/kill-now/{key_id} — execute kill ──────────────────────────────
 
+
 def test_post_kill_now_applies_kill(valid_token_and_key):
     key_id, token = valid_token_and_key
     app = _make_app()
@@ -175,6 +179,7 @@ def test_post_kill_now_bad_token_returns_400():
 # ── _apply_kill_now writes lifted_cap and PRESERVES daily_cap ─────────────────
 # (Killing must not destroy the user's baseline daily cap — the kill is a
 #  today-only override that auto-expires at midnight UTC.)
+
 
 @pytest.mark.asyncio
 async def test_apply_kill_now_sets_lifted_cap_and_preserves_daily_cap():

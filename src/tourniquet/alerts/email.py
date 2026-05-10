@@ -19,13 +19,7 @@ import resend
 from tourniquet.config import settings
 
 _EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001f300-\U0001f6ff"
-    "\U0001f900-\U0001f9ff"
-    "\U00002600-\U000027bf"
-    "\U0001f000-\U0001f02f"
-    "️"
-    "]",
+    "[\U0001f300-\U0001f6ff\U0001f900-\U0001f9ff\U00002600-\U000027bf\U0001f000-\U0001f02f️]",
     flags=re.UNICODE,
 )
 
@@ -66,9 +60,13 @@ async def send_email(message: str, event: object) -> None:
     recovery_offer: bool = bool(getattr(event, "recovery_offer", False))
 
     kill_html = (
-        f"<p><a href='{kill_now_url}' style='color:#dc2626;font-weight:bold'>"
-        f"🛑 Kill now (one-click, link expires in 24h)</a></p>"
-    ) if (kill_now_url and not recovery_offer) else ""
+        (
+            f"<p><a href='{kill_now_url}' style='color:#dc2626;font-weight:bold'>"
+            f"🛑 Kill now (one-click, link expires in 24h)</a></p>"
+        )
+        if (kill_now_url and not recovery_offer)
+        else ""
+    )
 
     recovery_html = ""
     if recovery_offer:
@@ -98,15 +96,17 @@ async def send_email(message: str, event: object) -> None:
     recipient = getattr(event, "alert_email", None) or settings.resend_from_email
 
     resend.api_key = settings.resend_api_key
-    resend.Emails.send({
-        "from": settings.resend_from_email,
-        "to": [recipient],
-        "subject": subject,
-        "html": (
-            # Canonical message — identical to what Slack/Telegram/JSONL receive
-            f"<p style='font-size:1.1rem'>{message}</p>"
-            f"{recovery_html}"
-            f"{kill_html}"
-            f"<p><a href='{settings.app_base_url}/dashboard'>Open dashboard</a></p>"
-        ),
-    })
+    resend.Emails.send(
+        {
+            "from": settings.resend_from_email,
+            "to": [recipient],
+            "subject": subject,
+            "html": (
+                # Canonical message — identical to what Slack/Telegram/JSONL receive
+                f"<p style='font-size:1.1rem'>{message}</p>"
+                f"{recovery_html}"
+                f"{kill_html}"
+                f"<p><a href='{settings.app_base_url}/dashboard'>Open dashboard</a></p>"
+            ),
+        }
+    )

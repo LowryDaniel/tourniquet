@@ -28,7 +28,7 @@ class Suggestion:
     suggested_cap_usd_cents: int
     soft_alert_50_usd_cents: int
     soft_throttle_80_usd_cents: int
-    rationale: str           # human-readable: "P95 of last 14 days × 1.5"
+    rationale: str  # human-readable: "P95 of last 14 days × 1.5"
     based_on_days: int
     avg_daily_usd_cents: int
     p50_usd_cents: int
@@ -39,10 +39,10 @@ class Suggestion:
 
 @dataclass
 class ProfileRecommendation:
-    profile: str             # "standard" | "monitor"
-    reason: str              # plain-English explanation
+    profile: str  # "standard" | "monitor"
+    reason: str  # plain-English explanation
     avg_daily_usd_cents: int
-    daily_cv: float          # coefficient of variation (stddev/mean) — measures volatility
+    daily_cv: float  # coefficient of variation (stddev/mean) — measures volatility
 
 
 def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendation:
@@ -69,7 +69,7 @@ def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendatio
 
     avg = sum(active) / len(active)
     variance = sum((v - avg) ** 2 for v in active) / len(active)
-    stddev = variance ** 0.5
+    stddev = variance**0.5
     cv = stddev / avg if avg > 0 else 0.0
 
     if cv < 0.4 and avg >= 2000:  # steady ≥ $20/day
@@ -145,9 +145,7 @@ def suggest_from_history(
     active_days = [d for d in daily_totals_usd_cents if d > 0]
 
     if len(active_days) < 3:
-        raise InsufficientHistory(
-            f"Need at least 3 non-zero spend days; got {len(active_days)}."
-        )
+        raise InsufficientHistory(f"Need at least 3 non-zero spend days; got {len(active_days)}.")
 
     sorted_days = sorted(active_days)
     avg_daily = math.ceil(sum(active_days) / len(active_days))

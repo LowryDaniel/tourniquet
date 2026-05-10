@@ -225,6 +225,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
 
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
+
     async with get_session() as s:
         k = (await s.execute(select(ApiKey).where(ApiKey.id == key_uuid))).scalar_one_or_none()
         if not k:
@@ -243,6 +244,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
 
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
+
     async with get_session() as s:
         k = (await s.execute(select(ApiKey).where(ApiKey.id == key_uuid))).scalar_one_or_none()
         if not k:

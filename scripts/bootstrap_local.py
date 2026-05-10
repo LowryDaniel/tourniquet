@@ -50,7 +50,9 @@ async def _ensure_schema() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def _bootstrap(email: str, name: str, cap_usd_cents: int, anthropic_key: str, auto_tune_mode: str = "suggest") -> str:
+async def _bootstrap(
+    email: str, name: str, cap_usd_cents: int, anthropic_key: str, auto_tune_mode: str = "suggest"
+) -> str:
     await _ensure_schema()
 
     fernet = Fernet(settings.fernet_key.encode())
@@ -81,6 +83,7 @@ async def _bootstrap(email: str, name: str, cap_usd_cents: int, anthropic_key: s
         )
         # Set auto_tune_mode if the column exists on the model
         from tourniquet.models import ApiKey as _AK
+
         if hasattr(_AK, "auto_tune_mode"):
             key_kwargs["auto_tune_mode"] = auto_tune_mode
         api_key = ApiKey(**key_kwargs)
@@ -147,11 +150,15 @@ def main() -> None:
                 suggested = suggestion.suggested_cap_usd_cents
 
                 print()
-                print(f"  Your last 14 days:  avg={format_money(avg_cents, currency)}"
-                      f"  p95={format_money(p95_cents, currency)}"
-                      f"  max={format_money(max_cents, currency)}")
-                print(f"  Suggested cap: {format_money(suggested, currency)}"
-                      f"  (you entered: {format_money(cap_usd_cents, currency)})")
+                print(
+                    f"  Your last 14 days:  avg={format_money(avg_cents, currency)}"
+                    f"  p95={format_money(p95_cents, currency)}"
+                    f"  max={format_money(max_cents, currency)}"
+                )
+                print(
+                    f"  Suggested cap: {format_money(suggested, currency)}"
+                    f"  (you entered: {format_money(cap_usd_cents, currency)})"
+                )
                 try:
                     answer = input("  Use suggested cap instead? [Y/n] ").strip().lower()
                 except (KeyboardInterrupt, EOFError):

@@ -49,6 +49,7 @@ def _col(text: str, code: str) -> str:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+
 async def _ensure_schema() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -61,9 +62,7 @@ async def _lookup(identifier: str) -> ApiKey:
     """
     async with get_session() as session:
         # Try exact name first
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.name == identifier)
-        )
+        result = await session.execute(select(ApiKey).where(ApiKey.name == identifier))
         by_name = result.scalars().all()
 
         # Try UUID prefix (8+ chars guard against over-broad matches)
@@ -96,6 +95,7 @@ async def _lookup(identifier: str) -> ApiKey:
 
 # ── Table renderer ────────────────────────────────────────────────────────────
 
+
 def _pad(s: str, w: int) -> str:
     return s[:w].ljust(w)
 
@@ -119,6 +119,7 @@ def _table(rows: list[list[str]], headers: list[str]) -> str:
 
 # ── Subcommands ───────────────────────────────────────────────────────────────
 
+
 async def _cmd_list() -> None:
     await _ensure_schema()
     today = date.today()
@@ -136,18 +137,25 @@ async def _cmd_list() -> None:
     for k in keys:
         async with get_session() as session:
             spent = await get_today_spend(k.id, today, session)
-        rows.append([
-            str(k.id)[:8],
-            k.name,
-            format_money(k.daily_cap_usd_cents, currency),
-            format_money(spent, currency),
-            k.profile,
-            "yes" if k.kill_enabled else "no",
-            getattr(k, "auto_tune_mode", "off"),
-            k.created_at.strftime("%Y-%m-%d") if k.created_at else "",
-        ])
+        rows.append(
+            [
+                str(k.id)[:8],
+                k.name,
+                format_money(k.daily_cap_usd_cents, currency),
+                format_money(spent, currency),
+                k.profile,
+                "yes" if k.kill_enabled else "no",
+                getattr(k, "auto_tune_mode", "off"),
+                k.created_at.strftime("%Y-%m-%d") if k.created_at else "",
+            ]
+        )
 
-    print(_table(rows, ["ID(short)", "Name", "Cap", "Spent today", "Profile", "Kill", "Auto-tune", "Created"]))
+    print(
+        _table(
+            rows,
+            ["ID(short)", "Name", "Cap", "Spent today", "Profile", "Kill", "Auto-tune", "Created"],
+        )
+    )
 
 
 async def _cmd_show(identifier: str) -> None:
@@ -234,7 +242,10 @@ async def _cmd_update(
             if hasattr(db_key, "absolute_ceiling_usd_cents"):
                 db_key.absolute_ceiling_usd_cents = ceil_cents
             else:
-                print("WARNING: absolute_ceiling_usd_cents column not yet migrated; skipping.", file=sys.stderr)
+                print(
+                    "WARNING: absolute_ceiling_usd_cents column not yet migrated; skipping.",
+                    file=sys.stderr,
+                )
 
         await session.commit()
         await session.refresh(db_key)
@@ -325,6 +336,7 @@ async def _cmd_suggest(identifier: str) -> None:
 
     try:
         from tourniquet.billing.suggestions import suggest_from_history  # type: ignore[import]
+
         suggestion = suggest_from_history(
             daily_totals_usd_cents=daily_totals,
             current_cap_usd_cents=k.daily_cap_usd_cents,
@@ -386,6 +398,7 @@ async def _cmd_lift(
 ) -> None:
     """Temporarily raise the daily cap for a key (direct DB write, no HTTP)."""
     import re
+
     await _ensure_schema()
     display_currency = settings.display_currency
     k = await _lookup(identifier)
@@ -421,7 +434,7 @@ async def _cmd_lift(
         expires_at = candidate
     else:
         # Default: until midnight UTC
-        tomorrow = (now.date() + timedelta(days=1))
+        tomorrow = now.date() + timedelta(days=1)
         expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
 
     async with get_session() as session:
@@ -490,14 +503,16 @@ async def _cmd_stats(identifier: str) -> None:
     for r in rows:
         cost = r.cost or 0
         pct = f"{(cost / cap * 100):.1f}%" if cap > 0 else "n/a"
-        table_rows.append([
-            str(r.day),
-            str(r.requests or 0),
-            str(r.input_tokens or 0),
-            str(r.output_tokens or 0),
-            format_money(cost, currency),
-            pct,
-        ])
+        table_rows.append(
+            [
+                str(r.day),
+                str(r.requests or 0),
+                str(r.input_tokens or 0),
+                str(r.output_tokens or 0),
+                format_money(cost, currency),
+                pct,
+            ]
+        )
         totals[0] += r.requests or 0
         totals[1] += r.input_tokens or 0
         totals[2] += r.output_tokens or 0
@@ -508,12 +523,15 @@ async def _cmd_stats(identifier: str) -> None:
 
     total_pct = f"{(totals[3] / cap * 100):.1f}%" if cap > 0 else "n/a"
     print("\n" + "=" * 60)
-    print(f"  {'TOTAL':<12}  {totals[0]:<10}  {totals[1]:<11}  {totals[2]:<11}  "
-          f"{format_money(totals[3], currency):<10}  {total_pct}")
+    print(
+        f"  {'TOTAL':<12}  {totals[0]:<10}  {totals[1]:<11}  {totals[2]:<11}  "
+        f"{format_money(totals[3], currency):<10}  {total_pct}"
+    )
     print()
 
 
 # ── Argument parser ───────────────────────────────────────────────────────────
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -534,15 +552,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_update = sub.add_parser("update", help="Update key fields")
     p_update.add_argument("key", metavar="KEY-ID-OR-NAME")
     p_update.add_argument("--cap", type=float, help="New daily cap in major currency units")
-    p_update.add_argument("--currency", help="Currency code for --cap (default: settings.display_currency)")
-    p_update.add_argument("--profile", choices=["standard", "strict", "monitor"], help="Billing profile")
+    p_update.add_argument(
+        "--currency", help="Currency code for --cap (default: settings.display_currency)"
+    )
+    p_update.add_argument(
+        "--profile", choices=["standard", "strict", "monitor"], help="Billing profile"
+    )
     kill_group = p_update.add_mutually_exclusive_group()
-    kill_group.add_argument("--kill-enabled", dest="kill_enabled", action="store_true", default=None)
+    kill_group.add_argument(
+        "--kill-enabled", dest="kill_enabled", action="store_true", default=None
+    )
     kill_group.add_argument("--kill-disabled", dest="kill_enabled", action="store_false")
-    p_update.add_argument("--auto-tune", choices=["off", "suggest", "creep"], dest="auto_tune",
-                          help="Auto-tune mode")
+    p_update.add_argument(
+        "--auto-tune", choices=["off", "suggest", "creep"], dest="auto_tune", help="Auto-tune mode"
+    )
     p_update.add_argument("--alert-email", dest="alert_email", help="Alert email address")
-    p_update.add_argument("--ceiling", type=float, help="Absolute spending ceiling in major currency units")
+    p_update.add_argument(
+        "--ceiling", type=float, help="Absolute spending ceiling in major currency units"
+    )
 
     # rotate
     p_rotate = sub.add_parser("rotate", help="Generate a new tq_ token")
@@ -564,20 +591,42 @@ def _build_parser() -> argparse.ArgumentParser:
     p_lift = sub.add_parser("lift", help="Temporarily raise the daily cap")
     p_lift.add_argument("key", metavar="KEY-ID-OR-NAME")
     lift_amount_group = p_lift.add_mutually_exclusive_group()
-    lift_amount_group.add_argument("--multiplier", type=float, default=None,
-                                   help="Multiply base cap by N (default 2)")
-    lift_amount_group.add_argument("--to", type=float, dest="to_amount", default=None,
-                                   metavar="AMOUNT", help="Lift to specific amount in major currency units")
-    lift_amount_group.add_argument("--to-ceiling", action="store_true", default=False,
-                                   help="Lift to absolute ceiling")
-    p_lift.add_argument("--currency", help="Currency code for --to (default: settings.display_currency)")
+    lift_amount_group.add_argument(
+        "--multiplier", type=float, default=None, help="Multiply base cap by N (default 2)"
+    )
+    lift_amount_group.add_argument(
+        "--to",
+        type=float,
+        dest="to_amount",
+        default=None,
+        metavar="AMOUNT",
+        help="Lift to specific amount in major currency units",
+    )
+    lift_amount_group.add_argument(
+        "--to-ceiling", action="store_true", default=False, help="Lift to absolute ceiling"
+    )
+    p_lift.add_argument(
+        "--currency", help="Currency code for --to (default: settings.display_currency)"
+    )
     lift_time_group = p_lift.add_mutually_exclusive_group()
-    lift_time_group.add_argument("--until", choices=["midnight"], default=None,
-                                 help="Lift until midnight UTC (default)")
-    lift_time_group.add_argument("--for-hours", type=float, dest="for_hours", default=None,
-                                 metavar="N", help="Lift for N hours from now")
-    lift_time_group.add_argument("--to-time", dest="to_time", default=None,
-                                 metavar="HH:MM", help="Lift until HH:MM today (or tomorrow if past)")
+    lift_time_group.add_argument(
+        "--until", choices=["midnight"], default=None, help="Lift until midnight UTC (default)"
+    )
+    lift_time_group.add_argument(
+        "--for-hours",
+        type=float,
+        dest="for_hours",
+        default=None,
+        metavar="N",
+        help="Lift for N hours from now",
+    )
+    lift_time_group.add_argument(
+        "--to-time",
+        dest="to_time",
+        default=None,
+        metavar="HH:MM",
+        help="Lift until HH:MM today (or tomorrow if past)",
+    )
 
     # unlift
     p_unlift = sub.add_parser("unlift", help="Clear a cap lift early")
@@ -603,16 +652,18 @@ def main() -> None:
             kill = True
         elif "--kill-disabled" in sys.argv:
             kill = False
-        asyncio.run(_cmd_update(
-            identifier=args.key,
-            cap=args.cap,
-            currency=args.currency,
-            profile=args.profile,
-            kill_enabled=kill,
-            auto_tune=args.auto_tune,
-            alert_email=args.alert_email,
-            ceiling=args.ceiling,
-        ))
+        asyncio.run(
+            _cmd_update(
+                identifier=args.key,
+                cap=args.cap,
+                currency=args.currency,
+                profile=args.profile,
+                kill_enabled=kill,
+                auto_tune=args.auto_tune,
+                alert_email=args.alert_email,
+                ceiling=args.ceiling,
+            )
+        )
 
     elif args.command == "rotate":
         asyncio.run(_cmd_rotate(args.key))
@@ -627,16 +678,18 @@ def main() -> None:
         asyncio.run(_cmd_stats(args.key))
 
     elif args.command == "lift":
-        asyncio.run(_cmd_lift(
-            identifier=args.key,
-            multiplier=args.multiplier,
-            to_amount=args.to_amount,
-            to_ceiling=args.to_ceiling,
-            currency=args.currency,
-            until_midnight=args.until == "midnight" if args.until else True,
-            for_hours=args.for_hours,
-            to_time=args.to_time,
-        ))
+        asyncio.run(
+            _cmd_lift(
+                identifier=args.key,
+                multiplier=args.multiplier,
+                to_amount=args.to_amount,
+                to_ceiling=args.to_ceiling,
+                currency=args.currency,
+                until_midnight=args.until == "midnight" if args.until else True,
+                for_hours=args.for_hours,
+                to_time=args.to_time,
+            )
+        )
 
     elif args.command == "unlift":
         asyncio.run(_cmd_unlift(args.key))
