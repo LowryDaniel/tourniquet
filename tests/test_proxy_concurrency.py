@@ -299,15 +299,15 @@ async def test_streaming_reservation_reconciles_overestimate(
 
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_stream","model":"claude-haiku-4-5-20251001","usage":{"input_tokens":2500}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_stream","model":"claude-haiku-4-5-20251001","usage":{"input_tokens":2500}}}\n\n'  # noqa: E501
         'event: content_block_start\n'
-        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'  # noqa: E501
         'event: content_block_delta\n'
-        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'  # noqa: E501
         'event: content_block_stop\n'
         'data: {"type":"content_block_stop","index":0}\n\n'
         'event: message_delta\n'
-        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2500}}\n\n'
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2500}}\n\n'  # noqa: E501
         'event: message_stop\n'
         'data: {"type":"message_stop"}\n\n'
     )

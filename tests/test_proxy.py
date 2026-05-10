@@ -82,7 +82,7 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
     """
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
     async def hit_immediately(acc):
@@ -90,7 +90,11 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -127,7 +131,7 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
     """
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
     async def hit_immediately(acc):
@@ -135,7 +139,11 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []

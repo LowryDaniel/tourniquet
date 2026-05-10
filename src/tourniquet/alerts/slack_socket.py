@@ -70,7 +70,10 @@ class SlackSocketClient:
         # which need slack_bot_token + slack_channel_id. Without those, the
         # Socket Mode WebSocket would idle without ever receiving an interaction
         # — pointless. Stay dormant until full config is present.
-        if not (getattr(settings, "slack_bot_token", "") and getattr(settings, "slack_channel_id", "")):
+        if not (
+            getattr(settings, "slack_bot_token", "")
+            and getattr(settings, "slack_channel_id", "")
+        ):
             log.info(
                 "Slack Socket Mode dormant — SLACK_APP_TOKEN set but SLACK_BOT_TOKEN / "
                 "SLACK_CHANNEL_ID missing. Webhook + mrkdwn link fallback in use."

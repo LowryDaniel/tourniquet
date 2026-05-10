@@ -27,7 +27,9 @@ def is_over_cap(spent_cents: int, cap_cents: int) -> bool:
     return spent_cents >= cap_cents
 
 
-async def add_spend(api_key_id: uuid.UUID, today: date, amount_cents: int, session: AsyncSession) -> None:
+async def add_spend(
+    api_key_id: uuid.UUID, today: date, amount_cents: int, session: AsyncSession
+) -> None:
     """Atomically increment caps_today in USD cents, inserting the row if it doesn't exist.
 
     Used for the reconciliation path after a reservation: the caller passes

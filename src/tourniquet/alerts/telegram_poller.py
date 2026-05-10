@@ -130,7 +130,11 @@ class TelegramPoller:
     async def _answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
         """Dismiss the loading spinner on the user's button after we've processed the tap."""
         try:
-            await self._call("answerCallbackQuery", callback_query_id=callback_query_id, text=(text or "")[:200])
+            await self._call(
+                "answerCallbackQuery",
+                callback_query_id=callback_query_id,
+                text=(text or "")[:200],
+            )
         except Exception as exc:
             log.warning("answerCallbackQuery failed: %s", exc)
 
@@ -189,7 +193,9 @@ class TelegramPoller:
                 cents = int(cents_str)
                 await _apply_lift_by_amount_from_callback(key_id.strip(), cents)
                 if cents == 0:
-                    confirmation = "Left alone. Tourniquet will alert you again at the next threshold."
+                    confirmation = (
+                        "Left alone. Tourniquet will alert you again at the next threshold."
+                    )
                 else:
                     confirmation = await _summary_after_bump(key_id.strip(), cents)
 

@@ -44,8 +44,10 @@ class AlertEvent:
     today: date
     api_key_id: str = ""      # UUID string — used for Telegram lift buttons
     kill_now_url: str | None = None   # signed magic-link; set when kill_enabled=False
-    alert_email: str | None = None    # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
-    recovery_offer: bool = False      # True when this alert is a "killed, want to bump?" recovery prompt
+    # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
+    alert_email: str | None = None
+    # True when this alert is a "killed, want to bump?" recovery prompt
+    recovery_offer: bool = False
 
 
 def _build_kill_now_url(key_id: str) -> str:
@@ -65,7 +67,10 @@ def _build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     from itsdangerous import URLSafeTimedSerializer
     s = URLSafeTimedSerializer(settings.secret_key, salt="lift-by-amount")
     token = s.dumps([key_id, amount_cents])
-    return f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
+    return (
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
+        f"?token={token}&amount={amount_cents}"
+    )
 
 
 def recovery_amounts_cents(cap_cents: int) -> list[int]:
@@ -336,9 +341,21 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     if settings.telegram_bot_token and settings.telegram_chat_id:
         if event.recovery_offer and event.api_key_id:
             amounts = recovery_amounts_cents(event.cap_usd_cents)
-            coroutines.append(_run("telegram", send_telegram_recovery_offer(message, event.api_key_id, amounts)))
+            coroutines.append(
+                _run(
+                    "telegram",
+                    send_telegram_recovery_offer(message, event.api_key_id, amounts),
+                )
+            )
         elif wants_lift_buttons and event.api_key_id:
-            coroutines.append(_run("telegram", send_telegram_with_lift_buttons(message, event.api_key_id, event.kill_now_url)))
+            coroutines.append(
+                _run(
+                    "telegram",
+                    send_telegram_with_lift_buttons(
+                        message, event.api_key_id, event.kill_now_url
+                    ),
+                )
+            )
         else:
             coroutines.append(_run("telegram", send_telegram(message)))
     else:

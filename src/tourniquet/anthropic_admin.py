@@ -80,7 +80,9 @@ async def fetch_cost_history(
     # Aggregate by date across all api_key_id buckets (or just the filtered one)
     daily: dict[date, tuple[int, int]] = {}  # date -> (usd_cents, request_count)
     for bucket in payload.get("data", []):
-        bucket_date_str = bucket.get("date") or bucket.get("period_start") or bucket.get("start_date")
+        bucket_date_str = (
+            bucket.get("date") or bucket.get("period_start") or bucket.get("start_date")
+        )
         if bucket_date_str is None:
             continue
         bucket_date = date.fromisoformat(bucket_date_str[:10])

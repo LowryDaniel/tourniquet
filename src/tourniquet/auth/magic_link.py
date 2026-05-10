@@ -44,7 +44,10 @@ def _verify_token(token: str) -> str:
         email: str = _signer.loads(token, max_age=settings.magic_link_expiry_seconds)
         return email
     except SignatureExpired as exc:
-        raise HTTPException(status_code=400, detail="Magic link has expired. Request a new one.") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Magic link has expired. Request a new one.",
+        ) from exc
     except BadSignature as exc:
         raise HTTPException(status_code=400, detail="Invalid magic link.") from exc
 
@@ -76,7 +79,10 @@ async def send_magic_link(request: Request, email: str = Form(...)) -> HTMLRespo
             "from": settings.resend_from_email,
             "to": [email],
             "subject": "Sign in to Tourniquet",
-            "html": f'<p>Click to sign in (expires in 15 minutes):</p><p><a href="{link}">{link}</a></p>',
+            "html": (
+                f'<p>Click to sign in (expires in 15 minutes):</p>'
+                f'<p><a href="{link}">{link}</a></p>'
+            ),
         })
 
     return HTMLResponse("<p>Check your email for the sign-in link.</p>")
@@ -92,12 +98,18 @@ async def verify_magic_link(request: Request, token: str) -> RedirectResponse:
         user = result.scalar_one_or_none()
 
         if user is None or user.magic_link_token is None:
-            raise HTTPException(status_code=400, detail="Magic link has already been used or was never issued.")
+            raise HTTPException(
+                status_code=400,
+                detail="Magic link has already been used or was never issued.",
+            )
 
         if not hmac.compare_digest(user.magic_link_token, expected_hash):
             raise HTTPException(
                 status_code=400,
-                detail="This sign-in link is no longer valid. If you requested a new link, use the most recent email.",
+                detail=(
+                    "This sign-in link is no longer valid. "
+                    "If you requested a new link, use the most recent email."
+                ),
             )
 
         # Consume the token — NULL it out so it can't be replayed.

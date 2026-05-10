@@ -129,7 +129,10 @@ def build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     for a different amount.
     """
     token = _lift_by_amount_signer().dumps([key_id, amount_cents])
-    return f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
+    return (
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
+        f"?token={token}&amount={amount_cents}"
+    )
 
 
 async def _apply_lift_by_amount(
@@ -155,7 +158,11 @@ async def _apply_lift_by_amount(
         if key is None:
             raise HTTPException(status_code=404, detail="Key not found")
 
-        base = key.lifted_cap_usd_cents if key.lifted_cap_usd_cents is not None else key.daily_cap_usd_cents
+        base = (
+            key.lifted_cap_usd_cents
+            if key.lifted_cap_usd_cents is not None
+            else key.daily_cap_usd_cents
+        )
         proposed = base + amount_cents
         ceiling = key.absolute_ceiling_usd_cents
         clamped = proposed > ceiling
@@ -170,7 +177,11 @@ async def _apply_lift_by_amount(
         key.lifted_cap_usd_cents = new_lifted
         key.lift_expires_at = expires_at
 
-        amt_label = f"${amount_cents // 100}" if amount_cents % 100 == 0 else f"${amount_cents / 100:.2f}"
+        amt_label = (
+            f"${amount_cents // 100}"
+            if amount_cents % 100 == 0
+            else f"${amount_cents / 100:.2f}"
+        )
         summary = (
             f"+{amt_label} bump via {source} — cap now ${new_lifted / 100:.2f} until midnight UTC"
             + (" (ceiling-clamped)" if clamped else "")
@@ -192,7 +203,9 @@ async def _apply_lift_by_amount(
         return key.name, new_lifted, int(clamped)
 
 
-async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str | None = None) -> tuple[str, int]:
+async def _apply_kill_now(
+    key_id: uuid.UUID, source: str = "web", token_sig: str | None = None
+) -> tuple[str, int]:
     """Emergency stop: block today's requests and preserve the daily_cap baseline.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) to today's spend,
@@ -232,7 +245,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
 
         # Capture the cap that WAS effective before the kill, for the audit log
         previous_lifted = key.lifted_cap_usd_cents
-        previous_effective = previous_lifted if previous_lifted is not None else key.daily_cap_usd_cents
+        previous_effective = (
+            previous_lifted if previous_lifted is not None else key.daily_cap_usd_cents
+        )
 
         key.kill_enabled = True
         key.lifted_cap_usd_cents = new_lifted
@@ -271,7 +286,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
         return key.name, new_lifted
 
 
-async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_sig: str | None = None) -> str | None:
+async def _apply_lift(
+    key_id: uuid.UUID, mode: str, source: str = "web", token_sig: str | None = None
+) -> str | None:
     """Apply a mode-based cap lift (`2x` / `ceiling` / `ignore`) until midnight UTC.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) with auto-expiry
@@ -348,7 +365,10 @@ class LiftRequest(BaseModel):
     to_amount_usd_cents: int | None = None
     duration_mode: Literal["until_midnight_utc", "for_hours", "to_time"] = "until_midnight_utc"
     duration_hours: float | None = None
-    duration_to_time: str | None = Field(None, description="HH:MM, interpreted as today or tomorrow if past")
+    duration_to_time: str | None = Field(
+        None,
+        description="HH:MM, interpreted as today or tomorrow if past",
+    )
 
 
 class LiftResponse(BaseModel):
@@ -427,12 +447,18 @@ def _compute_expiry(
 
     if duration_mode == "for_hours":
         if not duration_hours or duration_hours <= 0:
-            raise HTTPException(status_code=422, detail="duration_hours must be > 0 when duration_mode='for_hours'")
+            raise HTTPException(
+                status_code=422,
+                detail="duration_hours must be > 0 when duration_mode='for_hours'",
+            )
         return now + timedelta(hours=duration_hours)
 
     if duration_mode == "to_time":
         if not duration_to_time:
-            raise HTTPException(status_code=422, detail="duration_to_time required when duration_mode='to_time'")
+            raise HTTPException(
+                status_code=422,
+                detail="duration_to_time required when duration_mode='to_time'",
+            )
         m = re.match(r"^(\d{1,2}):(\d{2})$", duration_to_time)
         if not m:
             raise HTTPException(status_code=422, detail="duration_to_time must be HH:MM")
@@ -457,7 +483,10 @@ def _compute_lift_cap(
         raw = int(base_cap * multiplier)
     elif mode == "to":
         if to_amount is None:
-            raise HTTPException(status_code=422, detail="to_amount_usd_cents required when mode='to'")
+            raise HTTPException(
+                status_code=422,
+                detail="to_amount_usd_cents required when mode='to'",
+            )
         raw = to_amount
     elif mode == "to_ceiling":
         raw = absolute_ceiling
@@ -551,7 +580,10 @@ async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> H
     try:
         payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
     except SignatureExpired as exc:
-        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h). Request a new alert.") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Kill-now link has expired (24h). Request a new alert.",
+        ) from exc
     except BadSignature as exc:
         raise HTTPException(status_code=400, detail="Invalid kill-now token.") from exc
 
@@ -756,7 +788,14 @@ async def lift_mode_apply(
             "token_sig": sig,
         }
         summary = f"Lift {mode} via web — cap now ${new_cap / 100:.2f} until midnight UTC"
-        await record_action(session, key.id, ACTION_LIFT_MODE, "web", summary, details=lift_mode_details)
+        await record_action(
+            session,
+            key.id,
+            ACTION_LIFT_MODE,
+            "web",
+            summary,
+            details=lift_mode_details,
+        )
         try:
             await session.commit()
         except IntegrityError as exc:

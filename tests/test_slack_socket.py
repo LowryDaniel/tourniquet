@@ -44,14 +44,25 @@ async def test_handle_interactive_routes_lift_by_amount():
         "response_url": "https://hooks.slack.com/actions/...",
     }
     with (
-        patch("tourniquet.routes.admin._apply_lift_by_amount", new_callable=AsyncMock) as mock_bump,
-        patch("tourniquet.alerts.slack_socket._summary_after_bump", new_callable=AsyncMock, return_value="✓ Bumped"),
+        patch(
+            "tourniquet.routes.admin._apply_lift_by_amount",
+            new_callable=AsyncMock,
+        ) as mock_bump,
+        patch(
+            "tourniquet.alerts.slack_socket._summary_after_bump",
+            new_callable=AsyncMock,
+            return_value="✓ Bumped",
+        ),
     ):
         await c._handle_interactive(payload)
     # Slack handler now calls admin._apply_lift_by_amount directly with source="slack_socket"
     # so the audit log records who triggered the action.
     import uuid as _uuid
-    mock_bump.assert_awaited_once_with(_uuid.UUID("11111111-1111-1111-1111-111111111111"), 500, source="slack_socket")
+    mock_bump.assert_awaited_once_with(
+        _uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        500,
+        source="slack_socket",
+    )
 
 
 @pytest.mark.asyncio
@@ -68,8 +79,14 @@ async def test_handle_interactive_routes_kill_then_fires_recovery():
         "response_url": "https://hooks.slack.com/actions/...",
     }
     with (
-        patch("tourniquet.routes.admin._apply_kill_now", new_callable=AsyncMock) as mock_kill,
-        patch("tourniquet.alerts.telegram_callbacks._fire_recovery_alert_for", new_callable=AsyncMock) as mock_recovery,
+        patch(
+            "tourniquet.routes.admin._apply_kill_now",
+            new_callable=AsyncMock,
+        ) as mock_kill,
+        patch(
+            "tourniquet.alerts.telegram_callbacks._fire_recovery_alert_for",
+            new_callable=AsyncMock,
+        ) as mock_recovery,
     ):
         await c._handle_interactive(payload)
     mock_kill.assert_awaited_once()
@@ -95,12 +112,23 @@ async def test_handle_interactive_routes_lift_mode():
         "response_url": "https://hooks.slack.com/actions/...",
     }
     with (
-        patch("tourniquet.routes.admin._apply_lift", new_callable=AsyncMock) as mock_lift,
-        patch("tourniquet.alerts.slack_socket._summary_after_lift", new_callable=AsyncMock, return_value="✓ Lifted"),
+        patch(
+            "tourniquet.routes.admin._apply_lift",
+            new_callable=AsyncMock,
+        ) as mock_lift,
+        patch(
+            "tourniquet.alerts.slack_socket._summary_after_lift",
+            new_callable=AsyncMock,
+            return_value="✓ Lifted",
+        ),
     ):
         await c._handle_interactive(payload)
     import uuid as _uuid
-    mock_lift.assert_awaited_once_with(_uuid.UUID("11111111-1111-1111-1111-111111111111"), "2x", source="slack_socket")
+    mock_lift.assert_awaited_once_with(
+        _uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        "2x",
+        source="slack_socket",
+    )
 
 
 @pytest.mark.asyncio
@@ -138,7 +166,9 @@ async def test_send_slack_uses_bot_post_when_fully_configured(monkeypatch):
             await send_slack("hello", event)
 
         assert bot_route.called, "chat.postMessage should be called in bot-post mode"
-        assert not webhook_route.called, "Webhook must NOT be called when bot-post mode is active (avoids duplicates)"
+        assert not webhook_route.called, (
+            "Webhook must NOT be called when bot-post mode is active (avoids duplicates)"
+        )
         # Inspect the bot-post payload — must have Block Kit + channel + bearer auth
         request = bot_route.calls[0].request
         assert request.headers.get("Authorization", "").startswith("Bearer xoxb-")
@@ -167,7 +197,9 @@ async def test_send_slack_falls_back_to_webhook_when_bot_partially_configured(mo
         api_key_id="abcd-1234",
     )
     with respx.mock(assert_all_called=False) as mock:
-        bot_route = mock.post("https://slack.com/api/chat.postMessage").mock(return_value=Response(200, json={"ok": True}))
+        bot_route = mock.post("https://slack.com/api/chat.postMessage").mock(
+            return_value=Response(200, json={"ok": True})
+        )
         webhook_route = mock.post("https://hooks.slack.com/webhook").mock(return_value=Response(200))
         with (
             patch("tourniquet.config.settings.slack_app_token", "xapp-1-foo"),
@@ -198,7 +230,9 @@ def test_build_action_payload_recovery_uses_block_kit_buttons():
         api_key_id="abcd",
         recovery_offer=True,
     )
-    payload = _build_action_payload("msg", event, recovery_offer=True, kill_now_url=None, key_id="abcd")
+    payload = _build_action_payload(
+        "msg", event, recovery_offer=True, kill_now_url=None, key_id="abcd"
+    )
     elements = payload["blocks"][1]["elements"]
     assert len(elements) == 3
     # Each button needs a UNIQUE action_id (Slack rejects duplicates as invalid_blocks)

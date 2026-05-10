@@ -173,7 +173,10 @@ async def test_lookup_no_match_exits(monkeypatch):
         _make_execute_result([]),   # all keys
     ])
 
-    with patch("manage_keys.get_session", return_value=mock_session), pytest.raises(SystemExit) as exc_info:
+    with (
+        patch("manage_keys.get_session", return_value=mock_session),
+        pytest.raises(SystemExit) as exc_info,
+    ):
         await _lookup("nonexistent")
     assert exc_info.value.code == 1
 
@@ -195,7 +198,10 @@ async def test_lookup_ambiguous_exits(monkeypatch):
         _make_execute_result([]),          # UUID prefix matches 0
     ])
 
-    with patch("manage_keys.get_session", return_value=mock_session), pytest.raises(SystemExit) as exc_info:
+    with (
+        patch("manage_keys.get_session", return_value=mock_session),
+        pytest.raises(SystemExit) as exc_info,
+    ):
         await _lookup("test-key-alpha")
     # SystemExit because 2 candidates (same id is deduplicated, but k1 and k2 have different IDs)
     assert exc_info.value.code == 1

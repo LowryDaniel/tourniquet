@@ -100,10 +100,13 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     alert_webhook_url: str = ""
-    enable_mac_notifications: bool = False         # set ENABLE_MAC_NOTIFICATIONS=true to enable (macOS only, kept for compat)
-    enable_desktop_notifications: bool = False     # set ENABLE_DESKTOP_NOTIFICATIONS=true to enable on all platforms
+    # set ENABLE_MAC_NOTIFICATIONS=true to enable (macOS only, kept for compat)
+    enable_mac_notifications: bool = False
+    # set ENABLE_DESKTOP_NOTIFICATIONS=true to enable on all platforms
+    enable_desktop_notifications: bool = False
     mac_notification_style: str = "both"           # "text" | "action" | "both"
-    telegram_webhook_secret: str = ""        # X-Telegram-Bot-Api-Secret-Token value, set when configuring the bot
+    # X-Telegram-Bot-Api-Secret-Token value, set when configuring the bot
+    telegram_webhook_secret: str = ""
 
 
 settings = Settings()  # type: ignore[call-arg]

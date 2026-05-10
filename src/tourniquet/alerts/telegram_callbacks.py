@@ -128,7 +128,12 @@ async def _apply_kill_now_from_callback(key_id: str) -> None:
 
     try:
         name, new_cap = await _apply_kill_now(key_uuid, source="telegram_poll")
-        log.info("Telegram kill_now: killed key %s (%s), cap clamped to %d cents", key_id, name, new_cap)
+        log.info(
+            "Telegram kill_now: killed key %s (%s), cap clamped to %d cents",
+            key_id,
+            name,
+            new_cap,
+        )
     except Exception as exc:
         log.warning("Telegram kill_now callback failed for key %r: %s", key_id, exc)
 

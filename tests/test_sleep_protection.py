@@ -114,7 +114,7 @@ def test_linux_systemd_inhibit_active_when_tourniquet_holds_lock():
 
 
 def test_linux_no_relevant_inhibitor_returns_inactive():
-    """When no idle:sleep / tourniquet inhibitor is present, return active=False (honest unknown)."""
+    """When no idle:sleep / tourniquet inhibitor is present, active=False (honest unknown)."""
     with patch("tourniquet.dashboard.routes.platform.system", return_value="Linux"), \
          patch("tourniquet.dashboard.routes.subprocess.run",
                side_effect=_fake_run_factory(_SYSTEMD_INHIBIT_NO_RELEVANT_LOCK)):

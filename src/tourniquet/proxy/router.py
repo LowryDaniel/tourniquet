@@ -208,7 +208,10 @@ def _cap_hit_payload(
 async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
     auth_header = request.headers.get("authorization", "")
     if not auth_header:
-        raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Missing Authorization header."})
+        raise HTTPException(
+            status_code=401,
+            detail={"type": "invalid_token", "message": "Missing Authorization header."},
+        )
 
     # M4 — bound the in-memory body read. `await request.body()` would buffer
     # an unbounded payload into memory; on Tailscale / cloud-VM deploys a

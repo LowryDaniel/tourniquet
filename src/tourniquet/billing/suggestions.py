@@ -59,7 +59,10 @@ def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendatio
     if len(active) < 3:
         return ProfileRecommendation(
             profile="standard",
-            reason="Not enough spending history yet — defaulting to standard (hard kill at 100% with warnings at 50% and 80%).",
+            reason=(
+                "Not enough spending history yet — defaulting to standard "
+                "(hard kill at 100% with warnings at 50% and 80%)."
+            ),
             avg_daily_usd_cents=0,
             daily_cv=0.0,
         )

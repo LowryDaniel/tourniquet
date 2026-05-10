@@ -69,8 +69,12 @@ def test_start_creates_env_with_keys(tmp_path):
     env_path = config_dir / ".env"
     assert env_path.exists(), ".env was not created"
     content = env_path.read_text(encoding="utf-8")
-    fernet_line = next((line for line in content.splitlines() if line.startswith("FERNET_KEY=")), None)
-    secret_line = next((line for line in content.splitlines() if line.startswith("SECRET_KEY=")), None)
+    fernet_line = next(
+        (line for line in content.splitlines() if line.startswith("FERNET_KEY=")), None
+    )
+    secret_line = next(
+        (line for line in content.splitlines() if line.startswith("SECRET_KEY=")), None
+    )
     assert fernet_line is not None and fernet_line != "FERNET_KEY=", "FERNET_KEY not populated"
     assert secret_line is not None and secret_line != "SECRET_KEY=", "SECRET_KEY not populated"
 

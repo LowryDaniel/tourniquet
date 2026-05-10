@@ -180,7 +180,13 @@ async def test_biggest_request(session: AsyncSession):
     await session.flush()
 
     now = datetime.now(UTC)
-    big = _event(key.id, 999, model="claude-opus-4-7", input_tokens=200_000, created_at=now - timedelta(hours=1))
+    big = _event(
+        key.id,
+        999,
+        model="claude-opus-4-7",
+        input_tokens=200_000,
+        created_at=now - timedelta(hours=1),
+    )
     small = _event(key.id, 10, model="claude-haiku-4-5", created_at=now - timedelta(hours=2))
     session.add(big)
     session.add(small)
@@ -254,9 +260,15 @@ async def test_by_metadata_user_id(session: AsyncSession):
     await session.flush()
 
     now = datetime.now(UTC)
-    session.add(_event(key.id, 400, metadata_user_id="task-001", created_at=now - timedelta(hours=1)))
-    session.add(_event(key.id, 200, metadata_user_id="task-002", created_at=now - timedelta(hours=2)))
-    session.add(_event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3)))
+    session.add(
+        _event(key.id, 400, metadata_user_id="task-001", created_at=now - timedelta(hours=1))
+    )
+    session.add(
+        _event(key.id, 200, metadata_user_id="task-002", created_at=now - timedelta(hours=2))
+    )
+    session.add(
+        _event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3))
+    )
     await session.commit()
 
     report = await compute_insights(key.id, days=7, session=session)
@@ -280,9 +292,13 @@ async def test_suggestion_top_caller_rule(session: AsyncSession):
     now = datetime.now(UTC)
     # big-spender is 80% of total
     for _ in range(8):
-        session.add(_event(key.id, 100, user_agent="big-spender", created_at=now - timedelta(hours=1)))
+        session.add(
+            _event(key.id, 100, user_agent="big-spender", created_at=now - timedelta(hours=1))
+        )
     for _ in range(2):
-        session.add(_event(key.id, 100, user_agent="small-spender", created_at=now - timedelta(hours=2)))
+        session.add(
+            _event(key.id, 100, user_agent="small-spender", created_at=now - timedelta(hours=2))
+        )
     await session.commit()
 
     report = await compute_insights(key.id, days=7, session=session)
@@ -301,7 +317,15 @@ async def test_suggestion_biggest_request_rule(session: AsyncSession):
     await session.flush()
 
     now = datetime.now(UTC)
-    session.add(_event(key.id, 800, model="claude-opus-4-7", input_tokens=100_000, created_at=now - timedelta(hours=1)))
+    session.add(
+        _event(
+            key.id,
+            800,
+            model="claude-opus-4-7",
+            input_tokens=100_000,
+            created_at=now - timedelta(hours=1),
+        )
+    )
     session.add(_event(key.id, 100, created_at=now - timedelta(hours=2)))
     session.add(_event(key.id, 100, created_at=now - timedelta(hours=3)))
     await session.commit()

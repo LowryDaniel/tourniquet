@@ -134,7 +134,9 @@ async def send_slack(message: str, event: object = None) -> None:
     so we don't duplicate alerts. No-op if neither path is configured.
     """
     kill_now_url: str | None = getattr(event, "kill_now_url", None) if event is not None else None
-    recovery_offer: bool = bool(getattr(event, "recovery_offer", False)) if event is not None else False
+    recovery_offer: bool = (
+        bool(getattr(event, "recovery_offer", False)) if event is not None else False
+    )
     key_id: str = getattr(event, "api_key_id", "") if event is not None else ""
 
     # ── Bot-post mode (full Socket Mode) ──────────────────────────────────────
