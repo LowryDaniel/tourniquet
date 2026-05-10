@@ -309,6 +309,8 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
             request_id = ""
             in_tokens = 0
             out_tokens = 0
+            cache_creation_tokens = 0
+            cache_read_tokens = 0
             try:
                 parsed_resp = json.loads(upstream.content)
                 usage = parsed_resp.get("usage", {}) or {}
@@ -316,10 +318,22 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                 request_id = parsed_resp.get("id", "") or ""
                 in_tokens = int(usage.get("input_tokens", 0) or 0)
                 out_tokens = int(usage.get("output_tokens", 0) or 0)
+                cache_creation_tokens = int(
+                    usage.get("cache_creation_input_tokens", 0) or 0
+                )
+                cache_read_tokens = int(
+                    usage.get("cache_read_input_tokens", 0) or 0
+                )
             except Exception:
                 pass
 
-            actual_cost = cost_usd_cents(model_used or "claude-sonnet-4-6", in_tokens, out_tokens)
+            actual_cost = cost_usd_cents(
+                model_used or "claude-sonnet-4-6",
+                in_tokens,
+                out_tokens,
+                cache_creation_input_tokens=cache_creation_tokens,
+                cache_read_input_tokens=cache_read_tokens,
+            )
             # Reconcile: add (actual − reserved). Can be negative (refund of
             # over-estimate) or positive (under-estimate top-up — rare since
             # max_tokens caps the output).
@@ -377,7 +391,13 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
         async def _cap_check(acc: UsageAccumulator) -> bool:
             if not api_key.kill_enabled:
                 return False
-            c = cost_usd_cents(acc.model or "claude-sonnet-4-6", acc.input_tokens, acc.output_tokens)
+            c = cost_usd_cents(
+                acc.model or "claude-sonnet-4-6",
+                acc.input_tokens,
+                acc.output_tokens,
+                cache_creation_input_tokens=acc.cache_creation_input_tokens,
+                cache_read_input_tokens=acc.cache_read_input_tokens,
+            )
             # spent_cents_with_reservation already counts THIS request's
             # worst-case reservation, so subtract it back out before adding
             # the actual cost so far.
@@ -405,6 +425,8 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
                     accumulated.model or "claude-sonnet-4-6",
                     accumulated.input_tokens,
                     accumulated.output_tokens,
+                    cache_creation_input_tokens=accumulated.cache_creation_input_tokens,
+                    cache_read_input_tokens=accumulated.cache_read_input_tokens,
                 )
                 reconcile_delta = actual_cost - reserved_cents
                 async with get_session() as write_session:
