@@ -28,6 +28,11 @@ from tourniquet.config import settings
 class UsageAccumulator:
     input_tokens: int = 0
     output_tokens: int = 0
+    # Cache-tier token counts (Anthropic prompt caching). Surfaced on
+    # `message_start.message.usage` and on `message_delta.usage` for some
+    # event shapes. Priced via tourniquet.billing.pricing.cost_usd_cents.
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
     stop_reason: str = ""
     model: str = ""
     request_id: str = ""
@@ -40,9 +45,27 @@ class UsageAccumulator:
             self.request_id = msg.get("id", "")
             usage = msg.get("usage", {})
             self.input_tokens = usage.get("input_tokens", 0)
+            # Cache fields are emitted on the initial usage block when
+            # prompt caching is in use (zero/absent otherwise).
+            self.cache_creation_input_tokens = usage.get(
+                "cache_creation_input_tokens", 0
+            ) or 0
+            self.cache_read_input_tokens = usage.get(
+                "cache_read_input_tokens", 0
+            ) or 0
         elif event_type == "message_delta":
             usage = data.get("usage", {})
             self.output_tokens = usage.get("output_tokens", self.output_tokens)
+            # Some Anthropic event shapes restate cache fields on the delta;
+            # accept the latest value when present, otherwise keep prior.
+            if "cache_creation_input_tokens" in usage:
+                self.cache_creation_input_tokens = (
+                    usage.get("cache_creation_input_tokens", 0) or 0
+                )
+            if "cache_read_input_tokens" in usage:
+                self.cache_read_input_tokens = (
+                    usage.get("cache_read_input_tokens", 0) or 0
+                )
             self.stop_reason = data.get("delta", {}).get("stop_reason", self.stop_reason)
 
 
