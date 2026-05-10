@@ -4,3 +4,11 @@ compatibility_date = "2025-01-01"
 [assets]
 directory = "./landing"
 not_found_handling = "404-page"
+
+[[routes]]
+pattern = "tourniquet.dev"
+custom_domain = true
+
+[[routes]]
+pattern = "www.tourniquet.dev"
+custom_domain = true
