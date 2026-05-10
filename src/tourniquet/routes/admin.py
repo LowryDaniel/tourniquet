@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -161,9 +161,9 @@ async def _apply_lift_by_amount(
         new_lifted = min(proposed, ceiling)
 
         # Lift expires at the next midnight UTC (matches `tourniquet lift` default)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
         lifted_before = key.lifted_cap_usd_cents
         key.lifted_cap_usd_cents = new_lifted
@@ -215,9 +215,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
     from tourniquet.audit import ACTION_KILL_NOW, record_action
 
     today = date.today()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tomorrow = now.date() + timedelta(days=1)
-    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     async with get_session() as session:
         key = await session.get(ApiKey, key_id)
@@ -292,7 +292,7 @@ async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_s
     """
     from tourniquet.audit import ACTION_LIFT_MODE, record_action
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with get_session() as session:
         key = await session.get(ApiKey, key_id)
         if key is None:
@@ -316,7 +316,7 @@ async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_s
 
         lifted = min(lifted, key.absolute_ceiling_usd_cents)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
         lifted_before = key.lifted_cap_usd_cents
         key.lifted_cap_usd_cents = lifted
@@ -422,7 +422,7 @@ def _compute_expiry(
         # local time corresponds to UTC midnight. This is intentional: the daily spend
         # resets at midnight UTC, so the lift is coterminous with the spend period.
         tomorrow = (now.date() + timedelta(days=1))
-        return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     if duration_mode == "for_hours":
         if not duration_hours or duration_hours <= 0:
@@ -480,7 +480,7 @@ async def lift_cap(request: Request, payload: LiftRequest) -> LiftResponse:
     if not auth_header:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     async with get_session() as session:
         api_key = await _resolve_and_auth(auth_header, payload.key_id, session)
@@ -742,9 +742,9 @@ async def lift_mode_apply(
         else:
             new_cap = key.absolute_ceiling_usd_cents
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
         key.lifted_cap_usd_cents = new_cap
         key.lift_expires_at = expires_at
         key_name = key.name

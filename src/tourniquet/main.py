@@ -1,21 +1,20 @@
 """FastAPI application factory."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from tourniquet.alerts.telegram_callbacks import router as telegram_callback_router
 from tourniquet.auth.magic_link import router as auth_router
 from tourniquet.config import settings
 from tourniquet.dashboard.routes import router as dashboard_router
 from tourniquet.proxy.router import router as proxy_router
 from tourniquet.routes.admin import router as admin_router
-from tourniquet.alerts.telegram_callbacks import router as telegram_callback_router
-
 
 _ASSETS_DIR = Path(__file__).parent
 

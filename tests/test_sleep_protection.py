@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 from tourniquet.dashboard.routes import _sleep_protection_status
 
-
 # ── macOS / pmset ──────────────────────────────────────────────────────────────
 
 # Real-world style fixture: WhatsApp holds the actual PreventUserIdleSystemSleep

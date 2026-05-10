@@ -45,7 +45,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from tourniquet.config import settings as app_settings
 from tourniquet.models import ApiKey, Base
 
-
 # ── Test infra: real SQLite with schema, real ApiKey row ──────────────────────
 
 
@@ -335,22 +334,21 @@ async def test_streaming_reservation_reconciles_overestimate(
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport, base_url="http://testserver", timeout=30.0
-        ) as client:
-            async with client.stream(
-                "POST",
-                "/v1/messages",
-                content=request_body,
-                headers={
-                    "authorization": f"Bearer {seeded_key['token']}",
-                    "content-type": "application/json",
-                },
-            ) as resp:
-                # Drain the SSE so the proxy's _generate() finishes and runs
-                # the post-stream reconcile path.
-                body_bytes = b""
-                async for chunk in resp.aiter_bytes():
-                    body_bytes += chunk
-                assert resp.status_code == 200, body_bytes
+        ) as client, client.stream(
+            "POST",
+            "/v1/messages",
+            content=request_body,
+            headers={
+                "authorization": f"Bearer {seeded_key['token']}",
+                "content-type": "application/json",
+            },
+        ) as resp:
+            # Drain the SSE so the proxy's _generate() finishes and runs
+            # the post-stream reconcile path.
+            body_bytes = b""
+            async for chunk in resp.aiter_bytes():
+                body_bytes += chunk
+            assert resp.status_code == 200, body_bytes
 
     # Compute expectations with the same pricing function the production code uses.
     from tourniquet.billing.pricing import cost_usd_cents

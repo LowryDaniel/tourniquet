@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from tourniquet.auth.magic_link import _make_token, _token_hash
 
@@ -42,6 +39,7 @@ def _make_session_cm(user: MagicMock):
 
 def test_verify_fresh_token_creates_session():
     from fastapi.testclient import TestClient
+
     from tourniquet.main import app
 
     client = TestClient(app, raise_server_exceptions=True)
@@ -63,6 +61,7 @@ def test_verify_fresh_token_creates_session():
 
 def test_verify_replayed_token_returns_400():
     from fastapi.testclient import TestClient
+
     from tourniquet.main import app
 
     client = TestClient(app, raise_server_exceptions=True)
@@ -83,6 +82,7 @@ def test_verify_replayed_token_returns_400():
 
 def test_verify_tampered_token_returns_400():
     from fastapi.testclient import TestClient
+
     from tourniquet.main import app
 
     client = TestClient(app, raise_server_exceptions=True)
@@ -95,6 +95,7 @@ def test_verify_tampered_token_returns_400():
 
 def test_verify_hash_mismatch_returns_400():
     from fastapi.testclient import TestClient
+
     from tourniquet.main import app
 
     client = TestClient(app, raise_server_exceptions=True)

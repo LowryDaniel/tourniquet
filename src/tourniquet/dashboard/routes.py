@@ -14,7 +14,7 @@ import subprocess
 import uuid
 
 log = logging.getLogger(__name__)
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -122,10 +122,10 @@ async def _key_summary(key: ApiKey, today: date, session: AsyncSession) -> dict[
     # Effective cap: use lifted cap if active
     lifted = getattr(key, "lifted_cap_usd_cents", None)
     lift_expires = getattr(key, "lift_expires_at", None)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # SQLite returns naive datetimes; normalise to UTC before comparing
     if lift_expires is not None and lift_expires.tzinfo is None:
-        lift_expires = lift_expires.replace(tzinfo=timezone.utc)
+        lift_expires = lift_expires.replace(tzinfo=UTC)
     effective_cap = cap
     lift_active = False
     if lifted and lift_expires and lift_expires > now:
@@ -743,9 +743,9 @@ async def lift_cap(
     multiplier: float = Form(2.0),
 ) -> HTMLResponse:
     """Lift today's cap. Mode: 'multiplier' (× N) or 'ceiling' (to absolute ceiling)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tomorrow = now.date() + timedelta(days=1)
-    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     async with get_session() as session:
         key = await _get_key_or_404(key_id, session)

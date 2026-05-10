@@ -109,9 +109,10 @@ async def test_send_slack_uses_bot_post_when_fully_configured(monkeypatch):
     chat.postMessage is called with Block Kit and the webhook is NOT touched.
     """
     from datetime import date
-    from unittest.mock import AsyncMock
+
     import respx
     from httpx import Response
+
     from tourniquet.alerts.notifier import AlertEvent
     from tourniquet.alerts.slack import send_slack
 
@@ -152,8 +153,10 @@ async def test_send_slack_falls_back_to_webhook_when_bot_partially_configured(mo
     """If only SLACK_APP_TOKEN is set without bot+channel, route to webhook
     fallback (mrkdwn links). Avoids 400-from-Block-Kit on webhook path."""
     from datetime import date
+
     import respx
     from httpx import Response
+
     from tourniquet.alerts.notifier import AlertEvent
     from tourniquet.alerts.slack import send_slack
 
@@ -180,9 +183,10 @@ async def test_send_slack_falls_back_to_webhook_when_bot_partially_configured(mo
 
 def test_build_action_payload_recovery_uses_block_kit_buttons():
     """Recovery offer renders 3 primary buttons with action_id=lift_by_amount."""
-    from tourniquet.alerts.slack import _build_action_payload
-    from tourniquet.alerts.notifier import AlertEvent
     from datetime import date
+
+    from tourniquet.alerts.notifier import AlertEvent
+    from tourniquet.alerts.slack import _build_action_payload
 
     event = AlertEvent(
         api_key_name="test",

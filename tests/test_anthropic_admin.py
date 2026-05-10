@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import io
 import logging
-import sys
 from datetime import date, timedelta
-from unittest.mock import patch
 
 import httpx
 import pytest
 import respx
 
-from tourniquet.anthropic_admin import DailyCost, fetch_cost_history
+from tourniquet.anthropic_admin import fetch_cost_history
 
 _FAKE_KEY = "sk-ant-admin-SUPERSECRETKEY"
 _BASE = "https://api.anthropic.com/v1/organizations/cost_report"

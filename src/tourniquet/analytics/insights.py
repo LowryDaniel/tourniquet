@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
 from sqlalchemy import text
@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tourniquet.billing.formatting import format_money
 from tourniquet.config import settings
 from tourniquet.models import UsageEvent
-
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -95,7 +94,7 @@ async def compute_insights(
 
     Never makes a network call. Never returns prompt content (we don't store it).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_start = now - timedelta(days=days)
     prior_start = now - timedelta(days=days * 2)
 
@@ -292,7 +291,7 @@ async def compute_insights(
         ),
         {"kid": kid, "since": window_start},
     )
-    cap_hit_days = int((cap_days_result.scalar() or 0))
+    cap_hit_days = int(cap_days_result.scalar() or 0)
 
     cap_days_prior_result = await session.execute(
         text(
@@ -302,7 +301,7 @@ async def compute_insights(
         ),
         {"kid": kid, "prior": prior_start, "since": window_start},
     )
-    cap_hit_days_prior = int((cap_days_prior_result.scalar() or 0))
+    cap_hit_days_prior = int(cap_days_prior_result.scalar() or 0)
 
     # ── Suggestions ───────────────────────────────────────────────────────────
     suggestions: list[str] = []

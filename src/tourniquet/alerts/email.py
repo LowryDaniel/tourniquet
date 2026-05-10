@@ -18,7 +18,6 @@ import resend
 
 from tourniquet.config import settings
 
-
 _EMOJI_PATTERN = re.compile(
     "["
     "\U0001f300-\U0001f6ff"

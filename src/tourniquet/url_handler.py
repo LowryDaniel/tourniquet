@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
-
 
 # ── Platform implementations ───────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ def handle_url(url: str) -> int:
 def _do_lift(key_id: str, multiplier: float) -> int:
     """Lift the cap for key_id using the same logic as `tourniquet lift`."""
     import asyncio
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import select
 
@@ -168,10 +168,10 @@ def _do_lift(key_id: str, multiplier: float) -> int:
                 print(f"ERROR: no key with id {key_id!r}", flush=True)
                 return 1
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             tomorrow = now.date() + timedelta(days=1)
             expires_at = datetime(
-                tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc
+                tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC
             )
             raw = int(key.daily_cap_usd_cents * multiplier)
             lifted = min(raw, key.absolute_ceiling_usd_cents)

@@ -118,7 +118,7 @@ class SlackSocketClient:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 backoff = min(backoff * 2, _BACKOFF_MAX_SECONDS)
 
@@ -177,6 +177,7 @@ class SlackSocketClient:
         # on every audit row (rather than the generic source the Telegram-side
         # wrappers use).
         import uuid as _uuid_mod_inner
+
         from tourniquet.alerts.telegram_callbacks import _fire_recovery_alert_for
         from tourniquet.routes.admin import (
             _apply_kill_now,
@@ -252,6 +253,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
     except ValueError:
         return "✓ Lifted."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:
@@ -268,6 +270,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
     except ValueError:
         return f"✓ Bumped by ${cents / 100:.2f}."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:

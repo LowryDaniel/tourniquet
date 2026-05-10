@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import bcrypt
 import httpx
@@ -41,9 +41,11 @@ from tourniquet.db import get_session
 from tourniquet.models import ApiKey, UsageEvent
 from tourniquet.providers.anthropic import (
     CAP_HIT_HEADER,
-    FORWARD_HEADERS as _FORWARD_HEADERS,
     UsageAccumulator,
     stream_request,
+)
+from tourniquet.providers.anthropic import (
+    FORWARD_HEADERS as _FORWARD_HEADERS,
 )
 
 router = APIRouter()
@@ -180,7 +182,7 @@ def _cap_hit_payload(
 ) -> dict:
     """Build the canonical 402 `tourniquet_cap_hit` payload."""
     resets_at = (
-        datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+        datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
         + timedelta(days=1)
     )
     currency = settings.display_currency
@@ -225,7 +227,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
     async with get_session() as session:
         api_key = await _resolve_api_key(auth_header, session)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today = date.today()
         cap_cents = _effective_cap(api_key, now)
         lift_active = (

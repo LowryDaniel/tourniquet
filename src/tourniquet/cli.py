@@ -22,10 +22,10 @@ import secrets
 import sys
 import threading
 import webbrowser
+from datetime import UTC
 from pathlib import Path
 
 from tourniquet import __version__
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -166,10 +166,10 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
     from cryptography.fernet import Fernet
     from sqlalchemy import select
 
+    from tourniquet.billing.formatting import format_money, from_major_units
     from tourniquet.config import settings
     from tourniquet.db import engine, get_session
     from tourniquet.models import ApiKey, Base, User
-    from tourniquet.billing.formatting import format_money, from_major_units
 
     anthropic_key = input("Anthropic key (sk-ant-...): ").strip()
     if not anthropic_key.startswith("sk-ant-"):
@@ -504,7 +504,7 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
 
 def cmd_lift(args: argparse.Namespace) -> None:
     import asyncio
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import select
 
@@ -522,9 +522,9 @@ def cmd_lift(args: argparse.Namespace) -> None:
             if not key:
                 print(f"ERROR: no key named {args.key!r}", file=sys.stderr)
                 sys.exit(1)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             tomorrow = now.date() + timedelta(days=1)
-            expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+            expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
             raw = int(key.daily_cap_usd_cents * args.multiplier)
             lifted = min(raw, key.absolute_ceiling_usd_cents)
             key.lifted_cap_usd_cents = lifted

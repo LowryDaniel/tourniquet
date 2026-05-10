@@ -87,7 +87,7 @@ class TelegramPoller:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 backoff = min(backoff * 2, _BACKOFF_MAX_SECONDS)
 
@@ -215,6 +215,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
     except ValueError:
         return "✓ Lifted."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:
@@ -232,6 +233,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
     except ValueError:
         return f"✓ Bumped by ${cents / 100:.2f}."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:

@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from tourniquet.billing.formatting import format_money
@@ -158,7 +158,7 @@ async def _last_fired_threshold_today(api_key_id: Any, today: date, session: Any
 
     from tourniquet.models import ApiKeyAction
 
-    today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    today_start = datetime(today.year, today.month, today.day, tzinfo=UTC)
     result = await session.execute(
         select(ApiKeyAction)
         .where(

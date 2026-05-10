@@ -13,7 +13,7 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import bcrypt
 import httpx
@@ -330,7 +330,6 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
     """
     import os
     import tempfile
-    from contextlib import asynccontextmanager
 
     from cryptography.fernet import Fernet
     from sqlalchemy import text

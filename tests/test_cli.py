@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +33,6 @@ def test_version_flag(capsys):
 
 def test_start_no_browser_calls_uvicorn(tmp_path):
     """start --no-browser should call uvicorn.run with correct host/port."""
-    import uvicorn
 
     with (
         patch("uvicorn.run") as mock_run,
@@ -102,7 +98,6 @@ def test_config_dir_override(tmp_path):
 
 def test_browser_opens_without_no_browser_flag(tmp_path):
     """webbrowser.open should be called when --no-browser is not given."""
-    import threading
 
     open_calls: list[str] = []
 
@@ -151,7 +146,6 @@ def test_init_config_dir_idempotent(tmp_path):
 
 def test_register_url_handler_windows(capsys):
     """Windows path: winreg.CreateKey and SetValueEx called with correct values."""
-    from unittest.mock import call, MagicMock
 
     mock_winreg = MagicMock()
     mock_ctx = MagicMock()
@@ -165,6 +159,7 @@ def test_register_url_handler_windows(capsys):
         patch.dict("sys.modules", {"winreg": mock_winreg}),
     ):
         from importlib import reload
+
         import tourniquet.url_handler as uh
         reload(uh)
         uh.register_windows()
@@ -189,6 +184,7 @@ def test_register_url_handler_linux(tmp_path, capsys):
         patch("subprocess.run"),
     ):
         from importlib import reload
+
         import tourniquet.url_handler as uh
         reload(uh)
         uh.register_linux()
@@ -207,6 +203,7 @@ def test_register_url_handler_macos_prints_instructions(capsys):
     """macOS: register() must print setup instructions, not raise."""
     with patch("sys.platform", "darwin"):
         from importlib import reload
+
         import tourniquet.url_handler as uh
         reload(uh)
         uh.register_macos()
@@ -219,8 +216,9 @@ def test_register_url_handler_macos_prints_instructions(capsys):
 
 def test_handle_url_lift_dispatches(tmp_path):
     """handle_url with a valid tourniquet://lift/<id> URL calls _do_lift."""
-    import tourniquet.url_handler as uh
     from importlib import reload
+
+    import tourniquet.url_handler as uh
     reload(uh)
 
     fake_key_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

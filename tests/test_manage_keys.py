@@ -6,8 +6,8 @@ Intentionally avoids full CLI integration flows (those need a live DB).
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -77,8 +77,8 @@ def test_parser_update_kill_disabled():
 
 def test_parser_kill_mutex():
     """--kill-enabled and --kill-disabled are mutually exclusive."""
+
     from manage_keys import _build_parser
-    import argparse
     parser = _build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["update", "my-key", "--kill-enabled", "--kill-disabled"])
