@@ -26,6 +26,7 @@ reproduce that.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
@@ -64,10 +65,8 @@ async def db_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
-    try:
+    with contextlib.suppress(OSError):
         os.unlink(path)
-    except OSError:
-        pass
 
 
 @pytest_asyncio.fixture()

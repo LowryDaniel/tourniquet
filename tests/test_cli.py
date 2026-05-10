@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import MagicMock, patch
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -21,10 +22,8 @@ def _run_cli(*argv: str) -> int:
 
 def test_version_flag(capsys):
     from tourniquet import __version__
-    try:
+    with contextlib.suppress(SystemExit):
         _run_cli("--version")
-    except SystemExit:
-        pass
     captured = capsys.readouterr()
     assert __version__ in captured.out
 
@@ -70,8 +69,8 @@ def test_start_creates_env_with_keys(tmp_path):
     env_path = config_dir / ".env"
     assert env_path.exists(), ".env was not created"
     content = env_path.read_text(encoding="utf-8")
-    fernet_line = next((l for l in content.splitlines() if l.startswith("FERNET_KEY=")), None)
-    secret_line = next((l for l in content.splitlines() if l.startswith("SECRET_KEY=")), None)
+    fernet_line = next((line for line in content.splitlines() if line.startswith("FERNET_KEY=")), None)
+    secret_line = next((line for line in content.splitlines() if line.startswith("SECRET_KEY=")), None)
     assert fernet_line is not None and fernet_line != "FERNET_KEY=", "FERNET_KEY not populated"
     assert secret_line is not None and secret_line != "SECRET_KEY=", "SECRET_KEY not populated"
 

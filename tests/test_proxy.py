@@ -8,6 +8,7 @@ Three critical scenarios:
 
 # Tests are stubs — implementations added during W1 build.
 
+import contextlib
 import hashlib
 import json
 import time
@@ -449,7 +450,5 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
         assert "secret-leak-canary" not in captured.get("user-agent", "")
     finally:
         await engine.dispose()
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(path)
-        except OSError:
-            pass

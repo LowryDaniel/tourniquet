@@ -15,6 +15,7 @@ salts ("kill-now", "lift-by-amount") and 24h expiry.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import re
 import uuid
@@ -549,10 +550,10 @@ async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> H
     """Magic-link confirmation page. Verifies the token, then shows a confirm button."""
     try:
         payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h). Request a new alert.")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h). Request a new alert.") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.") from exc
 
     if payload_id != str(key_id):
         raise HTTPException(status_code=400, detail="Token key mismatch.")
@@ -584,10 +585,10 @@ async def kill_now_apply(
     """Execute the kill: sets kill_enabled=True and clamps cap to today's spend."""
     try:
         payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.") from exc
 
     if payload_id != str(key_id):
         raise HTTPException(status_code=400, detail="Token key mismatch.")
@@ -606,11 +607,9 @@ async def kill_now_apply(
         raise
 
     # Fire a recovery alert offering one-click bumps via every configured channel
-    try:
+    # Recovery alert is best-effort — never block the success page on it
+    with contextlib.suppress(Exception):
         await _fire_recovery_alert(key_id, key_name, new_cap)
-    except Exception:
-        # Recovery alert is best-effort — never block the success page on it
-        pass
 
     # Inline recovery buttons on the success page so user can act without leaving the browser
     from tourniquet.alerts.notifier import recovery_amounts_cents
@@ -671,10 +670,10 @@ async def lift_mode_confirm(
     """Confirm-page for a 2x or ceiling magic-link lift."""
     try:
         payload = _lift_mode_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Lift link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid lift token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Lift link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid lift token.") from exc
 
     payload_id, payload_mode = payload[0], payload[1]
     if payload_id != str(key_id) or payload_mode != mode or mode not in ("2x", "ceiling"):
@@ -718,10 +717,10 @@ async def lift_mode_apply(
     """Execute a 2x or ceiling magic-link lift."""
     try:
         payload = _lift_mode_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Lift link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid lift token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Lift link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid lift token.") from exc
 
     if payload[0] != str(key_id) or payload[1] != mode or mode not in ("2x", "ceiling"):
         raise HTTPException(status_code=400, detail="Token mismatch.")
@@ -786,10 +785,10 @@ async def lift_by_amount_confirm(
     """Confirm-page for the +$N recovery lift magic link."""
     try:
         payload = _lift_by_amount_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid recovery token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid recovery token.") from exc
 
     payload_id, payload_amount = payload[0], int(payload[1])
     if payload_id != str(key_id):
@@ -827,10 +826,10 @@ async def lift_by_amount_apply(
     """Execute the +$N recovery lift."""
     try:
         payload = _lift_by_amount_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid recovery token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid recovery token.") from exc
 
     payload_id, payload_amount = payload[0], int(payload[1])
     if payload_id != str(key_id) or payload_amount != amount:

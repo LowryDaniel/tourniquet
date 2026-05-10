@@ -7,6 +7,7 @@ by_metadata_user_id tests skip gracefully rather than fail hard.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -34,19 +35,16 @@ async def session() -> AsyncSession:
         await conn.run_sync(Base.metadata.create_all)
         # Add optional columns if they exist on the ORM model but weren't in initial schema
         if HAS_USER_AGENT:
-            try:
+            # column already exists
+            with contextlib.suppress(Exception):
                 await conn.execute(
                     text("ALTER TABLE usage_events ADD COLUMN user_agent VARCHAR(255)")
                 )
-            except Exception:
-                pass  # column already exists
         if HAS_METADATA_USER_ID:
-            try:
+            with contextlib.suppress(Exception):
                 await conn.execute(
                     text("ALTER TABLE usage_events ADD COLUMN metadata_user_id VARCHAR(255)")
                 )
-            except Exception:
-                pass
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:

@@ -8,6 +8,7 @@ Supported platforms:
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
 from datetime import UTC
@@ -62,10 +63,9 @@ def register_linux() -> None:
         ["update-desktop-database", str(apps_dir)],
         ["xdg-mime", "default", "tourniquet-url-handler.desktop", "x-scheme-handler/tourniquet"],
     ]:
-        try:
+        # command not available — skip gracefully
+        with contextlib.suppress(FileNotFoundError):
             subprocess.run(cmd, check=False, capture_output=True)
-        except FileNotFoundError:
-            pass  # command not available — skip gracefully
 
     print(f"Registered tourniquet:// URL handler: {desktop_file}")
 

@@ -250,15 +250,6 @@ def test_kill_now_url_included_when_kill_disabled():
 
     from tourniquet.alerts.notifier import _build_kill_now_url
 
-    event = AlertEvent(
-        api_key_name="ojw-swarm",
-        threshold_pct=80,
-        spent_usd_cents=420,
-        cap_usd_cents=500,
-        display_currency="GBP",
-        today=date(2026, 5, 6),
-        api_key_id="abc-123",
-    )
     # Verify the URL builder produces a URL containing the key_id
     url = _build_kill_now_url("abc-123")
     assert "abc-123" in url
@@ -432,17 +423,17 @@ async def test_webhook_url_not_in_logs(
     respx.post(secret_url).mock(return_value=Response(500, text="fail"))
 
     import logging
-    with caplog.at_level(logging.WARNING, logger="tourniquet.alerts.slack"):
-        with (
-            patch("tourniquet.config.settings.slack_webhook_url", secret_url),
-            patch("tourniquet.config.settings.telegram_bot_token", ""),
-            patch("tourniquet.config.settings.telegram_chat_id", ""),
-            patch("tourniquet.config.settings.alert_webhook_url", ""),
-            patch("tourniquet.config.settings.enable_mac_notifications", False),
-            patch("tourniquet.config.settings.enable_desktop_notifications", False),
-            patch("tourniquet.config.settings.resend_api_key", ""),
-        ):
-            await fan_out(base_event)
+    with (
+        caplog.at_level(logging.WARNING, logger="tourniquet.alerts.slack"),
+        patch("tourniquet.config.settings.slack_webhook_url", secret_url),
+        patch("tourniquet.config.settings.telegram_bot_token", ""),
+        patch("tourniquet.config.settings.telegram_chat_id", ""),
+        patch("tourniquet.config.settings.alert_webhook_url", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
+        patch("tourniquet.config.settings.resend_api_key", ""),
+    ):
+        await fan_out(base_event)
 
     full_log = " ".join(r.message for r in caplog.records)
     assert "SECRET_TOKEN_HERE" not in full_log

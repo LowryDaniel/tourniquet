@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class InsufficientHistory(Exception):
+class InsufficientHistory(Exception):  # noqa: N818 — public API name; renaming would break call sites
     """Raised when fewer than 3 non-zero spend days are available."""
 
 

@@ -43,10 +43,10 @@ def _verify_token(token: str) -> str:
     try:
         email: str = _signer.loads(token, max_age=settings.magic_link_expiry_seconds)
         return email
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Magic link has expired. Request a new one.")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid magic link.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Magic link has expired. Request a new one.") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid magic link.") from exc
 
 
 async def _get_or_create_user(email: str, session: AsyncSession) -> User:

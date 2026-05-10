@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import os
 import secrets
@@ -269,12 +270,13 @@ def cmd_test(args: argparse.Namespace) -> None:
     import httpx
 
     is_tty = sys.stdout.isatty()
-    GREEN = "\033[32m" if is_tty else ""
-    RED = "\033[31m" if is_tty else ""
-    YELLOW = "\033[33m" if is_tty else ""
-    DIM = "\033[2m" if is_tty else ""
-    BOLD = "\033[1m" if is_tty else ""
-    RESET = "\033[0m" if is_tty else ""
+    # ANSI color constants — uppercase by convention.
+    GREEN = "\033[32m" if is_tty else ""  # noqa: N806
+    RED = "\033[31m" if is_tty else ""  # noqa: N806
+    YELLOW = "\033[33m" if is_tty else ""  # noqa: N806
+    DIM = "\033[2m" if is_tty else ""  # noqa: N806
+    BOLD = "\033[1m" if is_tty else ""  # noqa: N806
+    RESET = "\033[0m" if is_tty else ""  # noqa: N806
 
     token = args.token or os.environ.get("ANTHROPIC_API_KEY", "")
     base_url = args.base_url or os.environ.get("ANTHROPIC_BASE_URL", "http://127.0.0.1:8787")
@@ -427,11 +429,12 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
     )
 
     is_tty = sys.stdout.isatty()
-    GREEN = "\033[32m" if is_tty else ""
-    RED = "\033[31m" if is_tty else ""
-    DIM = "\033[2m" if is_tty else ""
-    BOLD = "\033[1m" if is_tty else ""
-    RESET = "\033[0m" if is_tty else ""
+    # ANSI color constants — uppercase by convention.
+    GREEN = "\033[32m" if is_tty else ""  # noqa: N806
+    RED = "\033[31m" if is_tty else ""  # noqa: N806
+    DIM = "\033[2m" if is_tty else ""  # noqa: N806
+    BOLD = "\033[1m" if is_tty else ""  # noqa: N806
+    RESET = "\033[0m" if is_tty else ""  # noqa: N806
 
     label = "cap-hit" if threshold == -1 else f"{threshold}%"
     monitor_str = (
@@ -540,10 +543,8 @@ def cmd_lift(args: argparse.Namespace) -> None:
 def main() -> None:
     # Windows: force UTF-8 on stdout so banner characters don't crash cmd.exe
     if sys.platform == "win32":
-        try:
+        with contextlib.suppress(AttributeError, OSError):
             sys.stdout.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
     parser = argparse.ArgumentParser(
         prog="tourniquet",

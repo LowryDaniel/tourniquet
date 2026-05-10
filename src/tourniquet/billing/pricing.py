@@ -64,13 +64,12 @@ def cost_usd_cents(
     The cache args default to 0 for backward compatibility with callers that
     don't yet receive cache fields from upstream usage payloads.
     """
-    if model not in _RATES:
-        if model not in _UNKNOWN_MODELS_LOGGED:
-            log.warning(
-                "Unknown model %r — billing at fallback rate. Update pricing.py.",
-                model,
-            )
-            _UNKNOWN_MODELS_LOGGED.add(model)
+    if model not in _RATES and model not in _UNKNOWN_MODELS_LOGGED:
+        log.warning(
+            "Unknown model %r — billing at fallback rate. Update pricing.py.",
+            model,
+        )
+        _UNKNOWN_MODELS_LOGGED.add(model)
     input_rate, output_rate = _RATES.get(model, _FALLBACK_RATE)
     million = Decimal("1_000_000")
     total = (

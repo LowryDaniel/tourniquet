@@ -67,7 +67,6 @@ def test_verify_replayed_token_returns_400():
     client = TestClient(app, raise_server_exceptions=True)
     email = "replay@example.com"
     token = _make_token(email)
-    user = _make_mock_user(email, token)
 
     # Simulate token already consumed (magic_link_token = None)
     consumed_user = _make_mock_user(email, None)

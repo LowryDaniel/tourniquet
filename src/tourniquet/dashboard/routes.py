@@ -5,6 +5,7 @@ Localhost is the trust boundary; no session/magic-link auth.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import math
@@ -12,8 +13,6 @@ import platform
 import secrets
 import subprocess
 import uuid
-
-log = logging.getLogger(__name__)
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -34,6 +33,8 @@ from tourniquet.billing.suggestions import InsufficientHistory, suggest_from_his
 from tourniquet.config import settings
 from tourniquet.db import get_session
 from tourniquet.models import ApiKey, ApiKeyAction, UsageEvent
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -424,14 +425,12 @@ async def dashboard(request: Request) -> HTMLResponse:
             alert_log = await _get_alert_log(first_key_id, session)
             history = await _get_action_history(first_key_id, session)
             suggestion = None
-            try:
+            with contextlib.suppress(InsufficientHistory):
                 suggestion = suggest_from_history(
                     daily_totals,
                     first_key.daily_cap_usd_cents,
                     first_key.absolute_ceiling_usd_cents,
                 )
-            except InsufficientHistory:
-                pass
             insights = await compute_insights(first_key_id, 14, session)
             panel_ctx = {
                 "key": summaries[0],
@@ -473,19 +472,15 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 
         # Suggestion
         suggestion = None
-        try:
+        with contextlib.suppress(InsufficientHistory):
             suggestion = suggest_from_history(
                 daily_totals,
                 key.daily_cap_usd_cents,
                 key.absolute_ceiling_usd_cents,
             )
-        except InsufficientHistory:
-            pass
 
         # Insights for model breakdown
         insights = await compute_insights(key_id, 14, session)
-
-    template = "_partials/key_panel.html" if _is_htmx(request) else "dashboard.html"
 
     ctx = {
         "key": summary,
@@ -751,10 +746,7 @@ async def lift_cap(
         key = await _get_key_or_404(key_id, session)
         ceiling = key.absolute_ceiling_usd_cents
 
-        if mode == "multiplier":
-            raw = int(key.daily_cap_usd_cents * multiplier)
-        else:  # ceiling
-            raw = ceiling
+        raw = int(key.daily_cap_usd_cents * multiplier) if mode == "multiplier" else ceiling
 
         lifted_cents = min(raw, ceiling)
         key.lifted_cap_usd_cents = lifted_cents
@@ -1006,10 +998,8 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
         )
     except Exception as exc:
         # Never leak the admin key or exception details to the UI.
-        try:
-            del admin_key
-        except (NameError, UnboundLocalError):
-            pass
+        with contextlib.suppress(NameError, UnboundLocalError):
+            del admin_key  # noqa: F821 — function parameter; ruff loses the binding after earlier `del`
         log.warning("intel_fetch failed: %r", exc)
         return HTMLResponse(
             '<div class="intel-section intel-error">'
