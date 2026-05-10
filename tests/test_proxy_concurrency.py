@@ -169,21 +169,39 @@ async def _read_caps_today(session_factory, key_id: uuid.UUID) -> int:
 
 @pytest.mark.asyncio
 async def test_concurrent_requests_respect_cap(
-    seeded_key, session_factory, patch_router_session
+    seeded_key, session_factory, patch_router_session, monkeypatch
 ):
     """Fire 10 parallel POST /v1/messages at a key whose effective cap can only
     accommodate floor(cap / per-request worst-case) of them. The rest must 402.
 
-    Math: cap=$1.00=100c. Per-request worst-case is set so `cost_usd_cents`
-    returns 10c (so ~10 fit, 0 fail) — but to demonstrate enforcement under
-    concurrency we tighten the cap to 50c so exactly 5 fit and 5 fail.
+    Math: cap=50¢. Per-request worst-case reservation is 11¢
+    (`max_tokens=25_000` on haiku-4-5 at $4/M out). So
+    `floor(50/11) = 4` requests can fit, 6 must hit 402.
 
-    The assertion isn't that "exactly N succeed every run" by stochastic
-    interleaving — it's that the *combined committed spend* never exceeds
-    the cap, AND that the count of 200s + count of 402s = 10.
+    Determinism is the whole point of this test. To prove the cap is HARD —
+    not "soft and races" — we must isolate the reservation phase from the
+    reconciliation phase. Otherwise a refund (actual − reserved = 1¢ − 11¢
+    = −10¢) committed by an early winner can free budget for a late
+    reservation, which then succeeds on a fresh `total + 11 ≤ 50` check.
+    That is correct accounting (refunds *should* free budget for new
+    requests in steady-state), but it muddies the "atomic burst-cap"
+    assertion this test is here to prove.
+
+    Synchronization mechanism:
+
+      1. Wrap `reserve_or_reject` with a counter; when all 10 reservations
+         have *finished* (succeeded OR rejected), set `all_reservations_done`.
+      2. The mocked upstream `await`s `all_reservations_done` before
+         returning. That way no successful request can reach its
+         reconciliation path until every reservation is committed.
+
+    With this fence in place the test becomes deterministic: the SQL
+    UPSERT alone decides who gets in, exactly `floor(cap / amount)` succeed,
+    and reconciliation refunds drain spend AFTER the burst settles.
     """
-    # Tight cap: 50¢ — at most 4 of 10 11¢-reservation requests fit.
-    await _set_cap(session_factory, seeded_key["key_id"], 50)()
+    # Tight cap: 50¢ — at most floor(50/11) = 4 of 10 11¢-reservations fit.
+    cap_cents = 50
+    await _set_cap(session_factory, seeded_key["key_id"], cap_cents)()
 
     # Mock Anthropic upstream — return a small 1¢ response so reconciliation
     # refunds most of each ~11¢ reservation. The CAP test cares about the
@@ -207,14 +225,33 @@ async def test_concurrent_requests_respect_cap(
         "messages": [{"role": "user", "content": "hi"}],
     }).encode()
 
-    # Slow the upstream so reservations stack up BEFORE any reconcile fires.
-    # On a single SQLite engine, requests serialize at the I/O layer; the
-    # only way to reproduce the original race is to delay the upstream so
-    # multiple reservations are committed before the first reconcile lands.
-    # This mirrors real-world latency (Anthropic responses ~hundreds of ms
-    # to seconds; reconciliation runs only after the full response is read).
-    async def _slow_upstream(_req: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(0.2)
+    # ── Deterministic fence ────────────────────────────────────────────────
+    # `expected_reservations`: every coroutine attempts exactly one
+    # `reserve_or_reject`, regardless of whether it succeeds or rejects.
+    # So we wait for N completions before letting any upstream return.
+    expected_reservations = 10
+    completed = 0
+    all_reservations_done = asyncio.Event()
+
+    import tourniquet.proxy.router as router_mod
+    original_reserve = router_mod.reserve_or_reject
+
+    async def _counting_reserve(*args, **kwargs):
+        nonlocal completed
+        try:
+            return await original_reserve(*args, **kwargs)
+        finally:
+            completed += 1
+            if completed >= expected_reservations:
+                all_reservations_done.set()
+
+    monkeypatch.setattr(router_mod, "reserve_or_reject", _counting_reserve)
+
+    async def _fenced_upstream(_req: httpx.Request) -> httpx.Response:
+        # Block until every reservation in the burst has settled.
+        # No refund can reach caps_today before this point, so the SQL
+        # UPSERT's WHERE clause is the sole gate on cap enforcement.
+        await asyncio.wait_for(all_reservations_done.wait(), timeout=5.0)
         return httpx.Response(
             200,
             content=upstream_body,
@@ -235,7 +272,7 @@ async def test_concurrent_requests_respect_cap(
         return resp.status_code
 
     with respx.mock(assert_all_called=False) as rsx:
-        rsx.post("https://api.anthropic.com/v1/messages").mock(side_effect=_slow_upstream)
+        rsx.post("https://api.anthropic.com/v1/messages").mock(side_effect=_fenced_upstream)
         # Avoid noisy unmocked alert-channel requests if a threshold fires.
         rsx.post("https://slack.com/api/chat.postMessage").mock(
             return_value=httpx.Response(200, json={"ok": True})
@@ -248,30 +285,32 @@ async def test_concurrent_requests_respect_cap(
         async with httpx.AsyncClient(
             transport=transport, base_url="http://testserver", timeout=10.0
         ) as client:
-            statuses = await asyncio.gather(*[_fire_one(client) for _ in range(10)])
+            statuses = await asyncio.gather(
+                *[_fire_one(client) for _ in range(expected_reservations)]
+            )
 
     # 10 outcomes total.
-    assert len(statuses) == 10, statuses
+    assert len(statuses) == expected_reservations, statuses
     succeeded = [s for s in statuses if s == 200]
     refused = [s for s in statuses if s == 402]
-    assert len(succeeded) + len(refused) == 10, statuses
-    # Cap of 50¢ with 11¢ reservations → at most floor(50/11) = 4 succeed.
-    # The C1 race would let MORE through (all 10 in the worst case).
-    assert len(succeeded) <= 4, (
-        f"more requests passed than the cap allows: {statuses} — cap is soft"
-    )
-    # The reservation should usually fill the cap completely (4 succeed
-    # under contention), so we also assert at least 1 — otherwise the
-    # mocks aren't wired right.
-    assert len(succeeded) >= 1, (
-        f"no requests succeeded — check upstream mock: {statuses}"
+    assert len(succeeded) + len(refused) == expected_reservations, statuses
+    # With the upstream fenced, exactly floor(50/11) = 4 reservations fit.
+    # No refund can race a reservation, so this is a hard equality, not
+    # an upper bound. The C1 race (pre-atomic UPSERT) would let MORE through
+    # (up to all 10 in the worst case); a regression there fails this assert.
+    assert len(succeeded) == 4, (
+        f"expected exactly 4 of 10 reservations to fit a 50c cap at 11c each, "
+        f"got {len(succeeded)} — cap is soft (statuses: {statuses})"
     )
 
     # The hard-cap test: total committed spend must never exceed the cap,
-    # even with 10 simultaneous requests racing the reservation.
+    # even with 10 simultaneous requests racing the reservation. After
+    # reconciliation each successful 11¢ reservation refunds 10¢, so final
+    # total = 4 × 1¢ = 4¢. The strong invariant we care about is that the
+    # peak spend (post-reservation, pre-refund) never exceeded the cap.
     final_total = await _read_caps_today(session_factory, seeded_key["key_id"])
-    assert final_total <= 50, (
-        f"caps_today total {final_total}c exceeds cap of 50c — cap is soft"
+    assert final_total <= cap_cents, (
+        f"caps_today total {final_total}c exceeds cap of {cap_cents}c — cap is soft"
     )
 
 
