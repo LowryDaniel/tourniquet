@@ -60,7 +60,9 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    if: github.repository == 'LowryDaniel/tourniquet' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Gated on repo variable ENABLE_FLY_DEPLOY=true and FLY_API_TOKEN secret
+    # being set. Set both via Settings → Variables/Secrets when ready to ship.
+    if: github.repository == 'LowryDaniel/tourniquet' && github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_FLY_DEPLOY == 'true'
 
     steps:
       - uses: actions/checkout@v4
