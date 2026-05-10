@@ -82,7 +82,7 @@ async def _bootstrap(
             alert_email=email,
         )
         # Set auto_tune_mode if the column exists on the model
-        from tourniquet.models import ApiKey as _AK
+        from tourniquet.models import ApiKey as _AK  # noqa: N814
 
         if hasattr(_AK, "auto_tune_mode"):
             key_kwargs["auto_tune_mode"] = auto_tune_mode
@@ -101,12 +101,18 @@ def main() -> None:
         "--cap",
         type=float,
         default=5.00,
-        help="Daily spend cap in major units of the deployment currency (e.g. 10.00 = $10 / £10). Default: 5.00.",
+        help=(
+            "Daily spend cap in major units of the deployment currency "
+            "(e.g. 10.00 = $10 / £10). Default: 5.00."
+        ),
     )
     parser.add_argument(
         "--currency",
         default=None,
-        help="Currency code for the cap amount (e.g. USD, GBP, EUR). Defaults to DISPLAY_CURRENCY setting.",
+        help=(
+            "Currency code for the cap amount (e.g. USD, GBP, EUR). "
+            "Defaults to DISPLAY_CURRENCY setting."
+        ),
     )
     args = parser.parse_args()
 
@@ -129,7 +135,9 @@ def main() -> None:
 
         try:
             from tourniquet.anthropic_admin import fetch_cost_history  # noqa: E402
-            from tourniquet.billing.suggestions import suggest_from_history  # type: ignore[import]  # noqa: E402
+            from tourniquet.billing.suggestions import (
+                suggest_from_history,  # type: ignore[import]  # noqa: E402
+            )
 
             daily_costs = asyncio.run(fetch_cost_history(admin_key, days=14))
             # CRITICAL: zero out the admin key immediately after use
@@ -177,7 +185,7 @@ def main() -> None:
             print(f"  (suggestion module not available: {exc}; using --cap value)")
         except Exception as exc:
             # Never leak the key in error output
-            try:
+            try:  # noqa: SIM105 — explicit try/except is clearer than contextlib here
                 del admin_key
             except NameError:
                 pass
@@ -216,7 +224,7 @@ def main() -> None:
     print(f"  Key name   : {args.name}")
     print(f"  Daily cap  : {cap_display} ({cap_usd_cents} USD cents stored)")
     print(f"  Currency   : {currency}")
-    print(f"  Kill switch: ENABLED")
+    print("  Kill switch: ENABLED")
     print()
     print("  Bearer token (shown ONCE — copy it now):")
     print()

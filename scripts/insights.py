@@ -12,7 +12,6 @@ import argparse
 import asyncio
 import os
 import sys
-import uuid
 
 from sqlalchemy import select
 
@@ -98,10 +97,12 @@ def _render_report(report: InsightReport, currency: str) -> None:
     print(SEP)
     print()
     print(
-        f"  Total spent:      {_fmt(report.total_usd_cents, currency)}  ({report.request_count} requests)"
+        f"  Total spent:      {_fmt(report.total_usd_cents, currency)}  "
+        f"({report.request_count} requests)"
     )
     print(
-        f"  Cap-hit days:     {report.cap_hit_days}   (vs {report.cap_hit_days_prior} the prior {report.days} days)"
+        f"  Cap-hit days:     {report.cap_hit_days}   "
+        f"(vs {report.cap_hit_days_prior} the prior {report.days} days)"
     )
     print()
 

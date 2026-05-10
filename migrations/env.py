@@ -33,7 +33,7 @@ elif _db_url.startswith("postgresql+asyncpg://"):
 config.set_main_option("sqlalchemy.url", _db_url)
 
 # Import models so autogenerate can see them
-from tourniquet.models import Base  # noqa: F401
+from tourniquet.models import Base  # noqa: F401, E402
 
 target_metadata = Base.metadata
 

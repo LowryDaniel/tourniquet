@@ -19,16 +19,15 @@ import asyncio
 import os
 import secrets
 import sys
-import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import bcrypt
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from tourniquet.billing.formatting import format_money, from_major_units  # noqa: E402
 from tourniquet.billing.caps import get_today_spend  # noqa: E402
+from tourniquet.billing.formatting import format_money, from_major_units  # noqa: E402
 from tourniquet.config import settings  # noqa: E402
 from tourniquet.db import engine, get_session  # noqa: E402
 from tourniquet.models import ApiKey, Base, UsageEvent  # noqa: E402
@@ -167,7 +166,7 @@ async def _cmd_show(identifier: str) -> None:
         spent_today = await get_today_spend(k.id, today, session)
 
         # Last 7 days spend
-        since = datetime.now(timezone.utc) - timedelta(days=7)
+        since = datetime.now(UTC) - timedelta(days=7)
         result = await session.execute(
             select(func.coalesce(func.sum(UsageEvent.cost_usd_cents), 0))
             .where(UsageEvent.api_key_id == k.id)
@@ -296,7 +295,7 @@ async def _cmd_delete(identifier: str) -> None:
     await _ensure_schema()
     k = await _lookup(identifier)
 
-    confirm = input(f"Type the key name to confirm: ").strip()
+    confirm = input("Type the key name to confirm: ").strip()
     if confirm != k.name:
         print("Confirmation did not match. Aborting.", file=sys.stderr)
         sys.exit(1)
@@ -314,7 +313,7 @@ async def _cmd_suggest(identifier: str) -> None:
     k = await _lookup(identifier)
     currency = settings.display_currency
 
-    since = datetime.now(timezone.utc) - timedelta(days=14)
+    since = datetime.now(UTC) - timedelta(days=14)
     async with get_session() as session:
         result = await session.execute(
             select(
@@ -403,7 +402,7 @@ async def _cmd_lift(
     display_currency = settings.display_currency
     k = await _lookup(identifier)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Determine lifted amount
     if to_ceiling:
@@ -435,7 +434,7 @@ async def _cmd_lift(
     else:
         # Default: until midnight UTC
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     async with get_session() as session:
         db_key = await session.get(ApiKey, k.id)
@@ -467,7 +466,7 @@ async def _cmd_unlift(identifier: str) -> None:
     currency = settings.display_currency
     print(f"\nUnlifted cap for {_col(k.name, _BOLD)}")
     print(f"  Restored cap : {format_money(k.daily_cap_usd_cents, currency)}")
-    print(f"  Lift cleared.")
+    print("  Lift cleared.")
     print()
 
 
@@ -475,8 +474,7 @@ async def _cmd_stats(identifier: str) -> None:
     await _ensure_schema()
     k = await _lookup(identifier)
     currency = settings.display_currency
-    today = date.today()
-    since_dt = datetime.now(timezone.utc) - timedelta(days=14)
+    since_dt = datetime.now(UTC) - timedelta(days=14)
 
     async with get_session() as session:
         result = await session.execute(

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import os
 import secrets
 import sys
 from pathlib import Path
@@ -115,7 +114,7 @@ def main() -> None:
     print("  Creating local database schema...")
     try:
         asyncio.run(_create_schema())
-        print(f"  ✓ Schema ready")
+        print("  ✓ Schema ready")
     except Exception as exc:
         print(f"  ✗ Schema creation failed: {exc}", file=sys.stderr)
         sys.exit(1)
