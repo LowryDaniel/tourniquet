@@ -136,6 +136,8 @@ Short version:
 
 Full details: [docs/data-residency.md](docs/data-residency.md) and the [`/trust`](http://127.0.0.1:8787/trust) page in the running dashboard.
 
+Security model (deployment trust assumptions, threat boundaries, what's guarded vs. what isn't): [docs/security-model.md](docs/security-model.md).
+
 ---
 
 ## Configuration
