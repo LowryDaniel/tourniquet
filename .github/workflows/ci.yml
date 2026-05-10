@@ -34,7 +34,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,postgres]"
 
       - name: Lint
         run: ruff check . && ruff format --check .
