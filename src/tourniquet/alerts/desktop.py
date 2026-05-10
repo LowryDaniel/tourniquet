@@ -78,7 +78,7 @@ async def send_desktop_notification(
 
     # Windows / Linux — use plyer
     try:
-        import plyer  # type: ignore[import-not-found]
+        import plyer  # type: ignore[import-not-found,import-untyped]
 
         await asyncio.to_thread(
             plyer.notification.notify,
