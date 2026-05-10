@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tourniquet.main import app
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +92,10 @@ def test_dashboard_get_200(client):
     with (
         patch("tourniquet.dashboard.routes.get_session", cm),
         patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=500)),
-        patch("tourniquet.dashboard.routes.compute_insights", AsyncMock(return_value=_MOCK_INSIGHTS)),
+        patch(
+            "tourniquet.dashboard.routes.compute_insights",
+            AsyncMock(return_value=_MOCK_INSIGHTS),
+        ),
     ):
         resp = client.get("/dashboard")
 
@@ -110,7 +112,10 @@ def test_dashboard_lists_multiple_keys(client):
     with (
         patch("tourniquet.dashboard.routes.get_session", cm),
         patch("tourniquet.dashboard.routes.get_today_spend", AsyncMock(return_value=0)),
-        patch("tourniquet.dashboard.routes.compute_insights", AsyncMock(return_value=_MOCK_INSIGHTS)),
+        patch(
+            "tourniquet.dashboard.routes.compute_insights",
+            AsyncMock(return_value=_MOCK_INSIGHTS),
+        ),
     ):
         resp = client.get("/dashboard")
 
@@ -274,7 +279,11 @@ def test_update_cap_rejects_above_ceiling(client):
         )
 
     assert resp.status_code == 422
-    body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+    body = (
+        resp.json()
+        if resp.headers.get("content-type", "").startswith("application/json")
+        else resp.text
+    )
     detail = body.get("detail", "") if isinstance(body, dict) else body
     assert "ceiling" in detail.lower()
 

@@ -8,34 +8,35 @@ Supported platforms:
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
-
 
 # ── Platform implementations ───────────────────────────────────────────────────
 
 def register_windows() -> None:
     """Write HKCU registry keys so Windows dispatches tourniquet:// URLs."""
     try:
-        import winreg  # type: ignore[import]
+        import winreg
     except ImportError:
         print("ERROR: winreg module unavailable — are you running on Windows?", flush=True)
         return
 
     base = r"Software\Classes\tourniquet"
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Tourniquet Protocol")
-        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Tourniquet Protocol")  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")  # type: ignore[attr-defined]
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell") as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "open")
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell") as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "open")  # type: ignore[attr-defined]
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open") as _:
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open") as _:  # type: ignore[attr-defined]
         pass
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, 'tourniquet handle-url "%1"')
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, 'tourniquet handle-url "%1"')  # type: ignore[attr-defined]
 
     print("Registered tourniquet:// URL handler in HKCU\\Software\\Classes\\tourniquet")
 
@@ -62,10 +63,9 @@ def register_linux() -> None:
         ["update-desktop-database", str(apps_dir)],
         ["xdg-mime", "default", "tourniquet-url-handler.desktop", "x-scheme-handler/tourniquet"],
     ]:
-        try:
+        # command not available — skip gracefully
+        with contextlib.suppress(FileNotFoundError):
             subprocess.run(cmd, check=False, capture_output=True)
-        except FileNotFoundError:
-            pass  # command not available — skip gracefully
 
     print(f"Registered tourniquet:// URL handler: {desktop_file}")
 
@@ -149,7 +149,7 @@ def handle_url(url: str) -> int:
 def _do_lift(key_id: str, multiplier: float) -> int:
     """Lift the cap for key_id using the same logic as `tourniquet lift`."""
     import asyncio
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import select
 
@@ -161,17 +161,17 @@ def _do_lift(key_id: str, multiplier: float) -> int:
     async def _run() -> int:
         async with get_session() as session:
             result = await session.execute(
-                select(ApiKey).where(ApiKey.id == key_id)  # type: ignore[arg-type]
+                select(ApiKey).where(ApiKey.id == key_id)
             )
             key = result.scalar_one_or_none()
             if not key:
                 print(f"ERROR: no key with id {key_id!r}", flush=True)
                 return 1
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             tomorrow = now.date() + timedelta(days=1)
             expires_at = datetime(
-                tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc
+                tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC
             )
             raw = int(key.daily_cap_usd_cents * multiplier)
             lifted = min(raw, key.absolute_ceiling_usd_cents)

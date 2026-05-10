@@ -13,6 +13,7 @@ applied. Works with any URL scheme including http://127.0.0.1.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -114,10 +115,8 @@ async def _send_via_bot(payload: dict[str, Any], fallback_text: str) -> None:
             headers=headers,
         )
     data: dict[str, Any] = {}
-    try:
+    with contextlib.suppress(Exception):
         data = resp.json()
-    except Exception:
-        pass
     if not data.get("ok"):
         # Common errors: not_in_channel (bot needs invite), invalid_auth (bad token),
         # channel_not_found (wrong ID), invalid_blocks (duplicate action_id, > limits).
@@ -135,7 +134,9 @@ async def send_slack(message: str, event: object = None) -> None:
     so we don't duplicate alerts. No-op if neither path is configured.
     """
     kill_now_url: str | None = getattr(event, "kill_now_url", None) if event is not None else None
-    recovery_offer: bool = bool(getattr(event, "recovery_offer", False)) if event is not None else False
+    recovery_offer: bool = (
+        bool(getattr(event, "recovery_offer", False)) if event is not None else False
+    )
     key_id: str = getattr(event, "api_key_id", "") if event is not None else ""
 
     # ── Bot-post mode (full Socket Mode) ──────────────────────────────────────

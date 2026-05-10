@@ -15,12 +15,13 @@ salts ("kill-now", "lift-by-amount") and 24h expiry.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import re
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import bcrypt
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -128,7 +129,10 @@ def build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     for a different amount.
     """
     token = _lift_by_amount_signer().dumps([key_id, amount_cents])
-    return f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
+    return (
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
+        f"?token={token}&amount={amount_cents}"
+    )
 
 
 async def _apply_lift_by_amount(
@@ -154,27 +158,35 @@ async def _apply_lift_by_amount(
         if key is None:
             raise HTTPException(status_code=404, detail="Key not found")
 
-        base = key.lifted_cap_usd_cents if key.lifted_cap_usd_cents is not None else key.daily_cap_usd_cents
+        base = (
+            key.lifted_cap_usd_cents
+            if key.lifted_cap_usd_cents is not None
+            else key.daily_cap_usd_cents
+        )
         proposed = base + amount_cents
         ceiling = key.absolute_ceiling_usd_cents
         clamped = proposed > ceiling
         new_lifted = min(proposed, ceiling)
 
         # Lift expires at the next midnight UTC (matches `tourniquet lift` default)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
         lifted_before = key.lifted_cap_usd_cents
         key.lifted_cap_usd_cents = new_lifted
         key.lift_expires_at = expires_at
 
-        amt_label = f"${amount_cents // 100}" if amount_cents % 100 == 0 else f"${amount_cents / 100:.2f}"
+        amt_label = (
+            f"${amount_cents // 100}"
+            if amount_cents % 100 == 0
+            else f"${amount_cents / 100:.2f}"
+        )
         summary = (
             f"+{amt_label} bump via {source} — cap now ${new_lifted / 100:.2f} until midnight UTC"
             + (" (ceiling-clamped)" if clamped else "")
         )
-        action_details: dict = {
+        action_details: dict[str, Any] = {
             "amount_cents": amount_cents,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": new_lifted,
@@ -191,7 +203,9 @@ async def _apply_lift_by_amount(
         return key.name, new_lifted, int(clamped)
 
 
-async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str | None = None) -> tuple[str, int]:
+async def _apply_kill_now(
+    key_id: uuid.UUID, source: str = "web", token_sig: str | None = None
+) -> tuple[str, int]:
     """Emergency stop: block today's requests and preserve the daily_cap baseline.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) to today's spend,
@@ -215,9 +229,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
     from tourniquet.audit import ACTION_KILL_NOW, record_action
 
     today = date.today()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tomorrow = now.date() + timedelta(days=1)
-    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     async with get_session() as session:
         key = await session.get(ApiKey, key_id)
@@ -231,7 +245,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
 
         # Capture the cap that WAS effective before the kill, for the audit log
         previous_lifted = key.lifted_cap_usd_cents
-        previous_effective = previous_lifted if previous_lifted is not None else key.daily_cap_usd_cents
+        previous_effective = (
+            previous_lifted if previous_lifted is not None else key.daily_cap_usd_cents
+        )
 
         key.kill_enabled = True
         key.lifted_cap_usd_cents = new_lifted
@@ -251,7 +267,7 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
                 f"daily_cap preserved at ${key.daily_cap_usd_cents / 100:.2f}"
             )
         )
-        kill_details: dict = {
+        kill_details: dict[str, Any] = {
             "lifted_before_cents": previous_lifted,
             "lifted_after_cents": new_lifted,
             "daily_cap_cents_preserved": key.daily_cap_usd_cents,
@@ -270,7 +286,9 @@ async def _apply_kill_now(key_id: uuid.UUID, source: str = "web", token_sig: str
         return key.name, new_lifted
 
 
-async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_sig: str | None = None) -> str | None:
+async def _apply_lift(
+    key_id: uuid.UUID, mode: str, source: str = "web", token_sig: str | None = None
+) -> str | None:
     """Apply a mode-based cap lift (`2x` / `ceiling` / `ignore`) until midnight UTC.
 
     Sets `lifted_cap_usd_cents` (not `daily_cap_usd_cents`) with auto-expiry
@@ -292,7 +310,7 @@ async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_s
     """
     from tourniquet.audit import ACTION_LIFT_MODE, record_action
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with get_session() as session:
         key = await session.get(ApiKey, key_id)
         if key is None:
@@ -316,14 +334,14 @@ async def _apply_lift(key_id: uuid.UUID, mode: str, source: str = "web", token_s
 
         lifted = min(lifted, key.absolute_ceiling_usd_cents)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
         lifted_before = key.lifted_cap_usd_cents
         key.lifted_cap_usd_cents = lifted
         key.lift_expires_at = expires_at
 
         summary = f"Lift {mode} via {source} — cap now ${lifted / 100:.2f} until midnight UTC"
-        lift_mode_details: dict = {
+        lift_mode_details: dict[str, Any] = {
             "mode": mode,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": lifted,
@@ -347,7 +365,10 @@ class LiftRequest(BaseModel):
     to_amount_usd_cents: int | None = None
     duration_mode: Literal["until_midnight_utc", "for_hours", "to_time"] = "until_midnight_utc"
     duration_hours: float | None = None
-    duration_to_time: str | None = Field(None, description="HH:MM, interpreted as today or tomorrow if past")
+    duration_to_time: str | None = Field(
+        None,
+        description="HH:MM, interpreted as today or tomorrow if past",
+    )
 
 
 class LiftResponse(BaseModel):
@@ -422,16 +443,22 @@ def _compute_expiry(
         # local time corresponds to UTC midnight. This is intentional: the daily spend
         # resets at midnight UTC, so the lift is coterminous with the spend period.
         tomorrow = (now.date() + timedelta(days=1))
-        return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     if duration_mode == "for_hours":
         if not duration_hours or duration_hours <= 0:
-            raise HTTPException(status_code=422, detail="duration_hours must be > 0 when duration_mode='for_hours'")
+            raise HTTPException(
+                status_code=422,
+                detail="duration_hours must be > 0 when duration_mode='for_hours'",
+            )
         return now + timedelta(hours=duration_hours)
 
     if duration_mode == "to_time":
         if not duration_to_time:
-            raise HTTPException(status_code=422, detail="duration_to_time required when duration_mode='to_time'")
+            raise HTTPException(
+                status_code=422,
+                detail="duration_to_time required when duration_mode='to_time'",
+            )
         m = re.match(r"^(\d{1,2}):(\d{2})$", duration_to_time)
         if not m:
             raise HTTPException(status_code=422, detail="duration_to_time must be HH:MM")
@@ -456,7 +483,10 @@ def _compute_lift_cap(
         raw = int(base_cap * multiplier)
     elif mode == "to":
         if to_amount is None:
-            raise HTTPException(status_code=422, detail="to_amount_usd_cents required when mode='to'")
+            raise HTTPException(
+                status_code=422,
+                detail="to_amount_usd_cents required when mode='to'",
+            )
         raw = to_amount
     elif mode == "to_ceiling":
         raw = absolute_ceiling
@@ -480,7 +510,7 @@ async def lift_cap(request: Request, payload: LiftRequest) -> LiftResponse:
     if not auth_header:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     async with get_session() as session:
         api_key = await _resolve_and_auth(auth_header, payload.key_id, session)
@@ -501,6 +531,8 @@ async def lift_cap(request: Request, payload: LiftRequest) -> LiftResponse:
         )
 
         db_key = await session.get(ApiKey, api_key.id)
+        if db_key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
         db_key.lifted_cap_usd_cents = lifted_cents
         db_key.lift_expires_at = expires_at
         await session.commit()
@@ -531,6 +563,8 @@ async def unlift_cap(request: Request, payload: LiftRequest) -> UnliftResponse:
         api_key = await _resolve_and_auth(auth_header, payload.key_id, session)
 
         db_key = await session.get(ApiKey, api_key.id)
+        if db_key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
         db_key.lifted_cap_usd_cents = None
         db_key.lift_expires_at = None
         await session.commit()
@@ -549,10 +583,13 @@ async def kill_now_confirm(request: Request, key_id: uuid.UUID, token: str) -> H
     """Magic-link confirmation page. Verifies the token, then shows a confirm button."""
     try:
         payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h). Request a new alert.")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+    except SignatureExpired as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Kill-now link has expired (24h). Request a new alert.",
+        ) from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.") from exc
 
     if payload_id != str(key_id):
         raise HTTPException(status_code=400, detail="Token key mismatch.")
@@ -584,10 +621,10 @@ async def kill_now_apply(
     """Execute the kill: sets kill_enabled=True and clamps cap to today's spend."""
     try:
         payload_id: str = _kill_now_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid kill-now token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Kill-now link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid kill-now token.") from exc
 
     if payload_id != str(key_id):
         raise HTTPException(status_code=400, detail="Token key mismatch.")
@@ -606,11 +643,9 @@ async def kill_now_apply(
         raise
 
     # Fire a recovery alert offering one-click bumps via every configured channel
-    try:
+    # Recovery alert is best-effort — never block the success page on it
+    with contextlib.suppress(Exception):
         await _fire_recovery_alert(key_id, key_name, new_cap)
-    except Exception:
-        # Recovery alert is best-effort — never block the success page on it
-        pass
 
     # Inline recovery buttons on the success page so user can act without leaving the browser
     from tourniquet.alerts.notifier import recovery_amounts_cents
@@ -671,10 +706,10 @@ async def lift_mode_confirm(
     """Confirm-page for a 2x or ceiling magic-link lift."""
     try:
         payload = _lift_mode_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Lift link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid lift token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Lift link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid lift token.") from exc
 
     payload_id, payload_mode = payload[0], payload[1]
     if payload_id != str(key_id) or payload_mode != mode or mode not in ("2x", "ceiling"):
@@ -718,10 +753,10 @@ async def lift_mode_apply(
     """Execute a 2x or ceiling magic-link lift."""
     try:
         payload = _lift_mode_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Lift link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid lift token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Lift link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid lift token.") from exc
 
     if payload[0] != str(key_id) or payload[1] != mode or mode not in ("2x", "ceiling"):
         raise HTTPException(status_code=400, detail="Token mismatch.")
@@ -742,22 +777,29 @@ async def lift_mode_apply(
         else:
             new_cap = key.absolute_ceiling_usd_cents
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tomorrow = now.date() + timedelta(days=1)
-        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+        expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
         key.lifted_cap_usd_cents = new_cap
         key.lift_expires_at = expires_at
         key_name = key.name
 
         from tourniquet.audit import ACTION_LIFT_MODE, record_action
-        lift_mode_details: dict = {
+        lift_mode_details: dict[str, Any] = {
             "mode": mode,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": new_cap,
             "token_sig": sig,
         }
         summary = f"Lift {mode} via web — cap now ${new_cap / 100:.2f} until midnight UTC"
-        await record_action(session, key.id, ACTION_LIFT_MODE, "web", summary, details=lift_mode_details)
+        await record_action(
+            session,
+            key.id,
+            ACTION_LIFT_MODE,
+            "web",
+            summary,
+            details=lift_mode_details,
+        )
         try:
             await session.commit()
         except IntegrityError as exc:
@@ -786,10 +828,10 @@ async def lift_by_amount_confirm(
     """Confirm-page for the +$N recovery lift magic link."""
     try:
         payload = _lift_by_amount_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid recovery token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid recovery token.") from exc
 
     payload_id, payload_amount = payload[0], int(payload[1])
     if payload_id != str(key_id):
@@ -827,10 +869,10 @@ async def lift_by_amount_apply(
     """Execute the +$N recovery lift."""
     try:
         payload = _lift_by_amount_signer().loads(token, max_age=_KILL_NOW_EXPIRY_SECONDS)
-    except SignatureExpired:
-        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).")
-    except BadSignature:
-        raise HTTPException(status_code=400, detail="Invalid recovery token.")
+    except SignatureExpired as exc:
+        raise HTTPException(status_code=400, detail="Recovery link has expired (24h).") from exc
+    except BadSignature as exc:
+        raise HTTPException(status_code=400, detail="Invalid recovery token.") from exc
 
     payload_id, payload_amount = payload[0], int(payload[1])
     if payload_id != str(key_id) or payload_amount != amount:

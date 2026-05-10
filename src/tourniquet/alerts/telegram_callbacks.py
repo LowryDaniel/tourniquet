@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid as _uuid_mod
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -128,13 +129,18 @@ async def _apply_kill_now_from_callback(key_id: str) -> None:
 
     try:
         name, new_cap = await _apply_kill_now(key_uuid, source="telegram_poll")
-        log.info("Telegram kill_now: killed key %s (%s), cap clamped to %d cents", key_id, name, new_cap)
+        log.info(
+            "Telegram kill_now: killed key %s (%s), cap clamped to %d cents",
+            key_id,
+            name,
+            new_cap,
+        )
     except Exception as exc:
         log.warning("Telegram kill_now callback failed for key %r: %s", key_id, exc)
 
 
 @router.post("/callback")
-async def telegram_callback(request: Request) -> dict:
+async def telegram_callback(request: Request) -> dict[str, Any]:
     """Telegram sends an Update object when a user taps an inline button.
 
     Verify it's from our bot via the X-Telegram-Bot-Api-Secret-Token header,
@@ -146,7 +152,7 @@ async def telegram_callback(request: Request) -> dict:
         if incoming != secret:
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-    update: dict = await request.json()
+    update: dict[str, Any] = await request.json()
 
     callback_query = update.get("callback_query") or {}
     data: str = callback_query.get("data", "")

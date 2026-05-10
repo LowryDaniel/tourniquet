@@ -22,7 +22,6 @@ from tourniquet.routes.admin import (
     router,
 )
 
-
 _XSS_NAME = "<script>alert(1)</script>"
 _ESCAPED_PREFIX = "&lt;script&gt;"
 

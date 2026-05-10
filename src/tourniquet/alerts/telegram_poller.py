@@ -40,7 +40,7 @@ class TelegramPoller:
     """
 
     def __init__(self) -> None:
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
         self._client: httpx.AsyncClient | None = None
         self._offset = 0  # next update_id to fetch
@@ -87,7 +87,7 @@ class TelegramPoller:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 backoff = min(backoff * 2, _BACKOFF_MAX_SECONDS)
 
@@ -125,12 +125,17 @@ class TelegramPoller:
         assert self._client is not None
         url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
         r = await self._client.post(url, json=kwargs)
-        return r.json()
+        result: dict[str, Any] = r.json()
+        return result
 
     async def _answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
         """Dismiss the loading spinner on the user's button after we've processed the tap."""
         try:
-            await self._call("answerCallbackQuery", callback_query_id=callback_query_id, text=(text or "")[:200])
+            await self._call(
+                "answerCallbackQuery",
+                callback_query_id=callback_query_id,
+                text=(text or "")[:200],
+            )
         except Exception as exc:
             log.warning("answerCallbackQuery failed: %s", exc)
 
@@ -189,7 +194,9 @@ class TelegramPoller:
                 cents = int(cents_str)
                 await _apply_lift_by_amount_from_callback(key_id.strip(), cents)
                 if cents == 0:
-                    confirmation = "Left alone. Tourniquet will alert you again at the next threshold."
+                    confirmation = (
+                        "Left alone. Tourniquet will alert you again at the next threshold."
+                    )
                 else:
                     confirmation = await _summary_after_bump(key_id.strip(), cents)
 
@@ -215,6 +222,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
     except ValueError:
         return "✓ Lifted."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:
@@ -232,6 +240,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
     except ValueError:
         return f"✓ Bumped by ${cents / 100:.2f}."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:

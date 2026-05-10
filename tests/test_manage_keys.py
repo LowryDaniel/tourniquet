@@ -6,8 +6,8 @@ Intentionally avoids full CLI integration flows (those need a live DB).
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -77,8 +77,8 @@ def test_parser_update_kill_disabled():
 
 def test_parser_kill_mutex():
     """--kill-enabled and --kill-disabled are mutually exclusive."""
+
     from manage_keys import _build_parser
-    import argparse
     parser = _build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["update", "my-key", "--kill-enabled", "--kill-disabled"])
@@ -173,9 +173,11 @@ async def test_lookup_no_match_exits(monkeypatch):
         _make_execute_result([]),   # all keys
     ])
 
-    with patch("manage_keys.get_session", return_value=mock_session):
-        with pytest.raises(SystemExit) as exc_info:
-            await _lookup("nonexistent")
+    with (
+        patch("manage_keys.get_session", return_value=mock_session),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        await _lookup("nonexistent")
     assert exc_info.value.code == 1
 
 
@@ -196,9 +198,11 @@ async def test_lookup_ambiguous_exits(monkeypatch):
         _make_execute_result([]),          # UUID prefix matches 0
     ])
 
-    with patch("manage_keys.get_session", return_value=mock_session):
-        with pytest.raises(SystemExit) as exc_info:
-            await _lookup("test-key-alpha")
+    with (
+        patch("manage_keys.get_session", return_value=mock_session),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        await _lookup("test-key-alpha")
     # SystemExit because 2 candidates (same id is deduplicated, but k1 and k2 have different IDs)
     assert exc_info.value.code == 1
 

@@ -5,6 +5,7 @@ Localhost is the trust boundary; no session/magic-link auth.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import math
@@ -12,9 +13,7 @@ import platform
 import secrets
 import subprocess
 import uuid
-
-log = logging.getLogger(__name__)
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +33,8 @@ from tourniquet.billing.suggestions import InsufficientHistory, suggest_from_his
 from tourniquet.config import settings
 from tourniquet.db import get_session
 from tourniquet.models import ApiKey, ApiKeyAction, UsageEvent
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -122,10 +123,10 @@ async def _key_summary(key: ApiKey, today: date, session: AsyncSession) -> dict[
     # Effective cap: use lifted cap if active
     lifted = getattr(key, "lifted_cap_usd_cents", None)
     lift_expires = getattr(key, "lift_expires_at", None)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # SQLite returns naive datetimes; normalise to UTC before comparing
     if lift_expires is not None and lift_expires.tzinfo is None:
-        lift_expires = lift_expires.replace(tzinfo=timezone.utc)
+        lift_expires = lift_expires.replace(tzinfo=UTC)
     effective_cap = cap
     lift_active = False
     if lifted and lift_expires and lift_expires > now:
@@ -243,10 +244,22 @@ def _alert_channel_status() -> dict[str, dict[str, Any]]:
 
     return {
         "slack": {"configured": slack_configured, "tier": slack_tier},
-        "telegram": {"configured": telegram_configured, "tier": "in-app one-tap (long-poll)" if telegram_configured else ""},
-        "email": {"configured": email_configured, "tier": "Resend" if email_configured else ""},
-        "webhook": {"configured": webhook_configured, "tier": "generic JSON POST" if webhook_configured else ""},
-        "desktop": {"configured": desktop_configured, "tier": "OS banner" if desktop_configured else ""},
+        "telegram": {
+            "configured": telegram_configured,
+            "tier": "in-app one-tap (long-poll)" if telegram_configured else "",
+        },
+        "email": {
+            "configured": email_configured,
+            "tier": "Resend" if email_configured else "",
+        },
+        "webhook": {
+            "configured": webhook_configured,
+            "tier": "generic JSON POST" if webhook_configured else "",
+        },
+        "desktop": {
+            "configured": desktop_configured,
+            "tier": "OS banner" if desktop_configured else "",
+        },
     }
 
 
@@ -280,7 +293,11 @@ def _sleep_protection_status() -> dict[str, Any]:
             stripped = line.strip()
             if "PreventUserIdleSystemSleep" in stripped and stripped.endswith(" 1"):
                 active = True
-            elif active and "named:" in stripped.lower() and "PreventUserIdleSystemSleep" in stripped:
+            elif (
+                active
+                and "named:" in stripped.lower()
+                and "PreventUserIdleSystemSleep" in stripped
+            ):
                 # The per-process line that actually holds the assertion we
                 # flagged active. Match the assertion type to avoid attributing
                 # an unrelated assertion (e.g. NoIdleSleepAssertion from a
@@ -289,7 +306,11 @@ def _sleep_protection_status() -> dict[str, Any]:
                 if "caffeinate" in stripped.lower():
                     owner = "caffeinate"
                 else:
-                    owner = stripped.split("(", 1)[-1].split(")", 1)[0] if "(" in stripped else "unknown process"
+                    owner = (
+                        stripped.split("(", 1)[-1].split(")", 1)[0]
+                        if "(" in stripped
+                        else "unknown process"
+                    )
                 break
         return {"platform": "darwin", "active": active, "owner": owner}
 
@@ -321,7 +342,11 @@ def _sleep_protection_status() -> dict[str, Any]:
             if "SYSTEM:" in result.stdout:
                 tail = result.stdout.split("SYSTEM:", 1)[1].splitlines()
                 if len(tail) > 1 and "None." not in tail[1]:
-                    return {"platform": "windows", "active": True, "owner": "system-execution-state"}
+                    return {
+                        "platform": "windows",
+                        "active": True,
+                        "owner": "system-execution-state",
+                    }
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             pass
         return {"platform": "windows", "active": False, "owner": ""}
@@ -424,14 +449,12 @@ async def dashboard(request: Request) -> HTMLResponse:
             alert_log = await _get_alert_log(first_key_id, session)
             history = await _get_action_history(first_key_id, session)
             suggestion = None
-            try:
+            with contextlib.suppress(InsufficientHistory):
                 suggestion = suggest_from_history(
                     daily_totals,
                     first_key.daily_cap_usd_cents,
                     first_key.absolute_ceiling_usd_cents,
                 )
-            except InsufficientHistory:
-                pass
             insights = await compute_insights(first_key_id, 14, session)
             panel_ctx = {
                 "key": summaries[0],
@@ -473,19 +496,15 @@ async def key_panel(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 
         # Suggestion
         suggestion = None
-        try:
+        with contextlib.suppress(InsufficientHistory):
             suggestion = suggest_from_history(
                 daily_totals,
                 key.daily_cap_usd_cents,
                 key.absolute_ceiling_usd_cents,
             )
-        except InsufficientHistory:
-            pass
 
         # Insights for model breakdown
         insights = await compute_insights(key_id, 14, session)
-
-    template = "_partials/key_panel.html" if _is_htmx(request) else "dashboard.html"
 
     ctx = {
         "key": summary,
@@ -743,18 +762,15 @@ async def lift_cap(
     multiplier: float = Form(2.0),
 ) -> HTMLResponse:
     """Lift today's cap. Mode: 'multiplier' (× N) or 'ceiling' (to absolute ceiling)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tomorrow = now.date() + timedelta(days=1)
-    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+    expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
 
     async with get_session() as session:
         key = await _get_key_or_404(key_id, session)
         ceiling = key.absolute_ceiling_usd_cents
 
-        if mode == "multiplier":
-            raw = int(key.daily_cap_usd_cents * multiplier)
-        else:  # ceiling
-            raw = ceiling
+        raw = int(key.daily_cap_usd_cents * multiplier) if mode == "multiplier" else ceiling
 
         lifted_cents = min(raw, ceiling)
         key.lifted_cap_usd_cents = lifted_cents
@@ -763,13 +779,14 @@ async def lift_cap(
         today = date.today()
         summary = await _key_summary(key, today, session)
 
+    lifted_str = format_money(lifted_cents, settings.display_currency)
     return templates.TemplateResponse(request, "_partials/control_panel.html", {
         "key": summary,
         "key_id": str(key_id),
         "profiles": list(PROFILES.keys()),
         "profiles_obj": PROFILES,
         "auto_tune_modes": ["off", "suggest", "creep"],
-        "flash": f"Cap lifted to {format_money(lifted_cents, settings.display_currency)} until midnight UTC.",
+        "flash": f"Cap lifted to {lifted_str} until midnight UTC.",
     })
 
 
@@ -829,7 +846,8 @@ async def apply_suggestion(request: Request, key_id: uuid.UUID) -> HTMLResponse:
             )
             key.daily_cap_usd_cents = sug.suggested_cap_usd_cents
             await session.commit()
-            flash = f"Cap set to {format_money(sug.suggested_cap_usd_cents, settings.display_currency)}."
+            cap_str = format_money(sug.suggested_cap_usd_cents, settings.display_currency)
+            flash = f"Cap set to {cap_str}."
         except InsufficientHistory:
             flash = "Not enough history to apply suggestion."
 
@@ -877,7 +895,9 @@ async def intel_monitor(request: Request, key_id: uuid.UUID) -> HTMLResponse:
 
 
 @router.post("/dashboard/key/{key_id}/intel-fetch")
-async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form(...)) -> HTMLResponse:
+async def intel_fetch(
+    request: Request, key_id: uuid.UUID, admin_key: str = Form(...)
+) -> HTMLResponse:
     """User pasted an admin key — fetch 14 days of cost history, suggest a cap.
 
     The admin key is held in memory only for this single function call and is
@@ -949,7 +969,8 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
         prof_rec = recommend_profile(daily_totals)
 
         ceiling_note = (
-            '<p class="muted-hint">⚠ Capped by your absolute ceiling — the P95×1.5 number was higher than your safety wall.</p>'
+            '<p class="muted-hint">⚠ Capped by your absolute ceiling — '
+            'the P95×1.5 number was higher than your safety wall.</p>'
             if sug.capped_by_ceiling else ''
         )
         avg_str = format_money(avg_cents, currency)
@@ -967,23 +988,33 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
             # Sparkline + stat strip
             f'<div class="intel-spark-wrap">{sparkline}</div>'
             f'<div class="intel-stats">'
-            f'<div class="stat"><span class="stat-label">avg</span><span class="stat-val">{avg_str}</span></div>'
-            f'<div class="stat"><span class="stat-label">p50</span><span class="stat-val">{p50_str}</span></div>'
-            f'<div class="stat stat-highlight"><span class="stat-label">p95</span><span class="stat-val">{p95_str}</span></div>'
-            f'<div class="stat"><span class="stat-label">max</span><span class="stat-val">{mx_str}</span></div>'
+            f'<div class="stat"><span class="stat-label">avg</span>'
+            f'<span class="stat-val">{avg_str}</span></div>'
+            f'<div class="stat"><span class="stat-label">p50</span>'
+            f'<span class="stat-val">{p50_str}</span></div>'
+            f'<div class="stat stat-highlight"><span class="stat-label">p95</span>'
+            f'<span class="stat-val">{p95_str}</span></div>'
+            f'<div class="stat"><span class="stat-label">max</span>'
+            f'<span class="stat-val">{mx_str}</span></div>'
             f'</div>'
 
             # Reasoning block
-            f'<h3 class="intel-subhead">💡 Suggested cap: <span class="intel-big">{suggested_str}</span></h3>'
+            f'<h3 class="intel-subhead">💡 Suggested cap: '
+            f'<span class="intel-big">{suggested_str}</span></h3>'
             f'<ol class="reasoning-steps">'
-            f'<li><strong>P95 of your daily spend</strong> = {p95_str} <span class="muted-hint">(only one in 20 days exceeded this)</span></li>'
-            f'<li><strong>× 1.5 for headroom</strong> = {format_money(p95_x_15, currency)} <span class="muted-hint">(50% buffer for genuinely busy days)</span></li>'
-            f'<li><strong>Suggested cap</strong> = <strong>{suggested_str}</strong> <span class="muted-hint">(rounded up to whole cents)</span></li>'
+            f'<li><strong>P95 of your daily spend</strong> = {p95_str} '
+            f'<span class="muted-hint">(only one in 20 days exceeded this)</span></li>'
+            f'<li><strong>× 1.5 for headroom</strong> = '
+            f'{format_money(p95_x_15, currency)} '
+            f'<span class="muted-hint">(50% buffer for genuinely busy days)</span></li>'
+            f'<li><strong>Suggested cap</strong> = <strong>{suggested_str}</strong> '
+            f'<span class="muted-hint">(rounded up to whole cents)</span></li>'
             f'</ol>'
             f'{ceiling_note}'
 
             # Profile recommendation
-            f'<h3 class="intel-subhead">🎯 Recommended profile: <span class="intel-big">{prof_rec.profile}</span></h3>'
+            f'<h3 class="intel-subhead">🎯 Recommended profile: '
+            f'<span class="intel-big">{prof_rec.profile}</span></h3>'
             f'<p class="profile-reason">{prof_rec.reason}</p>'
 
             # Apply both
@@ -991,7 +1022,8 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
             f'hx-target="#intel-section" hx-swap="outerHTML" class="intel-apply-form">'
             f'<input type="hidden" name="cap_cents" value="{sug.suggested_cap_usd_cents}">'
             f'<input type="hidden" name="profile" value="{prof_rec.profile}">'
-            f'<button type="submit" class="btn-primary">Apply both — cap {suggested_str} and {prof_rec.profile} profile</button>'
+            f'<button type="submit" class="btn-primary">'
+            f'Apply both — cap {suggested_str} and {prof_rec.profile} profile</button>'
             f'</form>'
             f'<form hx-post="/dashboard/key/{key_id}/apply-suggestion-direct" '
             f'hx-target="#intel-section" hx-swap="outerHTML" style="display:inline">'
@@ -1000,20 +1032,23 @@ async def intel_fetch(request: Request, key_id: uuid.UUID, admin_key: str = Form
             f'</form> '
             f'<a href="/dashboard/key/{key_id}" class="btn-small">Skip — keep everything</a>'
 
-            f'<p class="muted-hint" style="margin-top:1rem">🔒 Your admin key was used once and immediately wiped. '
-            f'Not stored anywhere. You can <a href="https://console.anthropic.com/settings/admin-keys" target="_blank" rel="noopener">delete it from your Anthropic console</a> now.</p>'
+            f'<p class="muted-hint" style="margin-top:1rem">'
+            f'🔒 Your admin key was used once and immediately wiped. '
+            f'Not stored anywhere. You can '
+            f'<a href="https://console.anthropic.com/settings/admin-keys" '
+            f'target="_blank" rel="noopener">delete it from your Anthropic console</a> '
+            f'now.</p>'
             f'</div>'
         )
     except Exception as exc:
         # Never leak the admin key or exception details to the UI.
-        try:
-            del admin_key
-        except (NameError, UnboundLocalError):
-            pass
+        with contextlib.suppress(NameError, UnboundLocalError):
+            del admin_key  # noqa: F821 — function parameter; ruff loses the binding after earlier `del`
         log.warning("intel_fetch failed: %r", exc)
         return HTMLResponse(
             '<div class="intel-section intel-error">'
-            "<p class=\"warn\">⚠ Couldn't fetch usage history. Check that the admin key is valid and "
+            "<p class=\"warn\">⚠ Couldn't fetch usage history. "
+            "Check that the admin key is valid and "
             "your machine can reach api.anthropic.com, then try again.</p>"
             '</div>',
             status_code=500,
@@ -1071,7 +1106,11 @@ async def apply_suggestion_full(
         await session.commit()
 
     currency = settings.display_currency
-    kill_note = " Kill switch OFF (monitor mode — alerts only)." if not PROFILES[profile].default_kill_enabled else ""
+    kill_note = (
+        " Kill switch OFF (monitor mode — alerts only)."
+        if not PROFILES[profile].default_kill_enabled
+        else ""
+    )
     return HTMLResponse(
         f'<div class="intel-section intel-result">'
         f'<h2 class="next-steps-heading">✓ Applied</h2>'

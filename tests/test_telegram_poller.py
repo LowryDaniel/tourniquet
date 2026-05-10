@@ -47,8 +47,15 @@ async def test_dispatch_routes_lift_by_amount():
         },
     }
     with (
-        patch("tourniquet.alerts.telegram_callbacks._apply_lift_by_amount_from_callback", new_callable=AsyncMock) as mock_bump,
-        patch("tourniquet.alerts.telegram_poller._summary_after_bump", new_callable=AsyncMock, return_value="✓ Bumped"),
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_lift_by_amount_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_bump,
+        patch(
+            "tourniquet.alerts.telegram_poller._summary_after_bump",
+            new_callable=AsyncMock,
+            return_value="✓ Bumped",
+        ),
     ):
         await p._dispatch(update)
     mock_bump.assert_awaited_once_with("11111111-1111-1111-1111-111111111111", 500)
@@ -68,8 +75,14 @@ async def test_dispatch_routes_kill_now_then_fires_recovery():
         },
     }
     with (
-        patch("tourniquet.alerts.telegram_callbacks._apply_kill_now_from_callback", new_callable=AsyncMock) as mock_kill,
-        patch("tourniquet.alerts.telegram_callbacks._fire_recovery_alert_for", new_callable=AsyncMock) as mock_recovery,
+        patch(
+            "tourniquet.alerts.telegram_callbacks._apply_kill_now_from_callback",
+            new_callable=AsyncMock,
+        ) as mock_kill,
+        patch(
+            "tourniquet.alerts.telegram_callbacks._fire_recovery_alert_for",
+            new_callable=AsyncMock,
+        ) as mock_recovery,
     ):
         await p._dispatch(update)
     mock_kill.assert_awaited_once()

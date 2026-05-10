@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import threading
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 

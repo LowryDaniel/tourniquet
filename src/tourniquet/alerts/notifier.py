@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from tourniquet.billing.formatting import format_money
@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 # Strong references to background fan_out tasks. asyncio.create_task only
 # returns a weak-referenced task; without holding it here the GC can cancel
 # the dispatch mid-flight. Tasks discard themselves via add_done_callback.
-_pending_tasks: set[asyncio.Task] = set()
+_pending_tasks: set[asyncio.Task[Any]] = set()
 
 
 @dataclasses.dataclass
@@ -44,8 +44,10 @@ class AlertEvent:
     today: date
     api_key_id: str = ""      # UUID string — used for Telegram lift buttons
     kill_now_url: str | None = None   # signed magic-link; set when kill_enabled=False
-    alert_email: str | None = None    # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
-    recovery_offer: bool = False      # True when this alert is a "killed, want to bump?" recovery prompt
+    # per-key recipient for email channel; falls back to RESEND_FROM_EMAIL
+    alert_email: str | None = None
+    # True when this alert is a "killed, want to bump?" recovery prompt
+    recovery_offer: bool = False
 
 
 def _build_kill_now_url(key_id: str) -> str:
@@ -65,7 +67,10 @@ def _build_lift_by_amount_url(key_id: str, amount_cents: int) -> str:
     from itsdangerous import URLSafeTimedSerializer
     s = URLSafeTimedSerializer(settings.secret_key, salt="lift-by-amount")
     token = s.dumps([key_id, amount_cents])
-    return f"{settings.app_base_url}/admin/lift-by-amount/{key_id}?token={token}&amount={amount_cents}"
+    return (
+        f"{settings.app_base_url}/admin/lift-by-amount/{key_id}"
+        f"?token={token}&amount={amount_cents}"
+    )
 
 
 def recovery_amounts_cents(cap_cents: int) -> list[int]:
@@ -158,7 +163,7 @@ async def _last_fired_threshold_today(api_key_id: Any, today: date, session: Any
 
     from tourniquet.models import ApiKeyAction
 
-    today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    today_start = datetime(today.year, today.month, today.day, tzinfo=UTC)
     result = await session.execute(
         select(ApiKeyAction)
         .where(
@@ -239,7 +244,7 @@ async def maybe_fire_threshold_alert(
         # Background dispatch — proxy returns to the user without waiting.
         # `fan_out` itself returns per-channel statuses but we don't need them
         # here; logs from each channel will surface failures.
-        async def _dispatch():
+        async def _dispatch() -> None:
             try:
                 await fan_out(event, kill_enabled=kill_enabled)
             except Exception:
@@ -336,9 +341,21 @@ async def fan_out(event: AlertEvent, *, kill_enabled: bool = True) -> dict[str, 
     if settings.telegram_bot_token and settings.telegram_chat_id:
         if event.recovery_offer and event.api_key_id:
             amounts = recovery_amounts_cents(event.cap_usd_cents)
-            coroutines.append(_run("telegram", send_telegram_recovery_offer(message, event.api_key_id, amounts)))
+            coroutines.append(
+                _run(
+                    "telegram",
+                    send_telegram_recovery_offer(message, event.api_key_id, amounts),
+                )
+            )
         elif wants_lift_buttons and event.api_key_id:
-            coroutines.append(_run("telegram", send_telegram_with_lift_buttons(message, event.api_key_id, event.kill_now_url)))
+            coroutines.append(
+                _run(
+                    "telegram",
+                    send_telegram_with_lift_buttons(
+                        message, event.api_key_id, event.kill_now_url
+                    ),
+                )
+            )
         else:
             coroutines.append(_run("telegram", send_telegram(message)))
     else:

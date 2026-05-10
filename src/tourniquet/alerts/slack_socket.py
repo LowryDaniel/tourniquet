@@ -55,7 +55,7 @@ class SlackSocketClient:
     """Open a Socket Mode WebSocket to Slack and dispatch interactive events."""
 
     def __init__(self) -> None:
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
         self._http: httpx.AsyncClient | None = None
 
@@ -70,7 +70,10 @@ class SlackSocketClient:
         # which need slack_bot_token + slack_channel_id. Without those, the
         # Socket Mode WebSocket would idle without ever receiving an interaction
         # — pointless. Stay dormant until full config is present.
-        if not (getattr(settings, "slack_bot_token", "") and getattr(settings, "slack_channel_id", "")):
+        if not (
+            getattr(settings, "slack_bot_token", "")
+            and getattr(settings, "slack_channel_id", "")
+        ):
             log.info(
                 "Slack Socket Mode dormant — SLACK_APP_TOKEN set but SLACK_BOT_TOKEN / "
                 "SLACK_CHANNEL_ID missing. Webhook + mrkdwn link fallback in use."
@@ -118,7 +121,7 @@ class SlackSocketClient:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 backoff = min(backoff * 2, _BACKOFF_MAX_SECONDS)
 
@@ -132,7 +135,8 @@ class SlackSocketClient:
         if not data.get("ok"):
             log.warning("apps.connections.open failed: %s", data)
             return None
-        return data.get("url")
+        url: str | None = data.get("url")
+        return url
 
     async def _handle_socket(self, ws: Any) -> None:
         async for raw in ws:
@@ -177,6 +181,7 @@ class SlackSocketClient:
         # on every audit row (rather than the generic source the Telegram-side
         # wrappers use).
         import uuid as _uuid_mod_inner
+
         from tourniquet.alerts.telegram_callbacks import _fire_recovery_alert_for
         from tourniquet.routes.admin import (
             _apply_kill_now,
@@ -252,6 +257,7 @@ async def _summary_after_lift(key_id: str, mode: str) -> str:
     except ValueError:
         return "✓ Lifted."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:
@@ -268,6 +274,7 @@ async def _summary_after_bump(key_id: str, cents: int) -> str:
     except ValueError:
         return f"✓ Bumped by ${cents / 100:.2f}."
     from sqlalchemy import select
+
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
     async with get_session() as s:

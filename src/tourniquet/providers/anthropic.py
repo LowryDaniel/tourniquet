@@ -165,34 +165,36 @@ async def stream_request(
 
     event_type = ""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        async with client.stream("POST", url, content=request_body, headers=forward_headers) as resp:
-            async for line in resp.aiter_lines():
-                # SSE blank line = event terminator. Reset event_type so a stray
-                # later `data:` without a preceding `event:` doesn't get mis-tagged.
-                if not line.strip():
-                    event_type = ""
+    async with (
+        httpx.AsyncClient(timeout=30.0) as client,
+        client.stream("POST", url, content=request_body, headers=forward_headers) as resp,
+    ):
+        async for line in resp.aiter_lines():
+            # SSE blank line = event terminator. Reset event_type so a stray
+            # later `data:` without a preceding `event:` doesn't get mis-tagged.
+            if not line.strip():
+                event_type = ""
+                yield (line + "\n").encode(), acc
+                continue
+
+            if line.startswith("event:"):
+                event_type = line[len("event:"):].strip()
+            elif line.startswith("data:"):
+                if not event_type:
+                    # `data:` with no preceding `event:` — protocol violation
+                    # or partial frame. Forward the raw line but do not ingest.
                     yield (line + "\n").encode(), acc
                     continue
+                raw = line[len("data:"):].strip()
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    data = {}
+                acc.ingest_event(event_type, data)
 
-                if line.startswith("event:"):
-                    event_type = line[len("event:"):].strip()
-                elif line.startswith("data:"):
-                    if not event_type:
-                        # `data:` with no preceding `event:` — protocol violation
-                        # or partial frame. Forward the raw line but do not ingest.
-                        yield (line + "\n").encode(), acc
-                        continue
-                    raw = line[len("data:"):].strip()
-                    try:
-                        data = json.loads(raw)
-                    except json.JSONDecodeError:
-                        data = {}
-                    acc.ingest_event(event_type, data)
+                if await on_cap_check(acc):
+                    yield CAP_HIT_EVENT.encode(), acc
+                    return
 
-                    if await on_cap_check(acc):
-                        yield CAP_HIT_EVENT.encode(), acc
-                        return
-
-                yield (line + "\n").encode(), acc
-            yield b"\n", acc
+            yield (line + "\n").encode(), acc
+        yield b"\n", acc

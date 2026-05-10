@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class InsufficientHistory(Exception):
+class InsufficientHistory(Exception):  # noqa: N818 — public API name; renaming would break call sites
     """Raised when fewer than 3 non-zero spend days are available."""
 
 
@@ -59,7 +59,10 @@ def recommend_profile(daily_totals_usd_cents: list[int]) -> ProfileRecommendatio
     if len(active) < 3:
         return ProfileRecommendation(
             profile="standard",
-            reason="Not enough spending history yet — defaulting to standard (hard kill at 100% with warnings at 50% and 80%).",
+            reason=(
+                "Not enough spending history yet — defaulting to standard "
+                "(hard kill at 100% with warnings at 50% and 80%)."
+            ),
             avg_daily_usd_cents=0,
             daily_cv=0.0,
         )
@@ -234,4 +237,4 @@ async def get_rolling_avg_from_db(
     if not rows:
         return 0
     total = sum(row[1] for row in rows)
-    return math.ceil(total / days)
+    return int(math.ceil(total / days))

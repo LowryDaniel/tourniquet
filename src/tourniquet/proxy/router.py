@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import bcrypt
 import httpx
@@ -41,9 +43,11 @@ from tourniquet.db import get_session
 from tourniquet.models import ApiKey, UsageEvent
 from tourniquet.providers.anthropic import (
     CAP_HIT_HEADER,
-    FORWARD_HEADERS as _FORWARD_HEADERS,
     UsageAccumulator,
     stream_request,
+)
+from tourniquet.providers.anthropic import (
+    FORWARD_HEADERS as _FORWARD_HEADERS,
 )
 
 router = APIRouter()
@@ -144,7 +148,7 @@ async def _resolve_api_key(token: str, session: AsyncSession) -> ApiKey:
     return key
 
 
-def _estimate_worst_case_cents(parsed_body: dict) -> tuple[str, int]:
+def _estimate_worst_case_cents(parsed_body: dict[str, Any]) -> tuple[str, int]:
     """Estimate the worst-case cost (in USD cents) of a request from its body.
 
     Worst case = (estimated input tokens from message char count, +25% pad)
@@ -177,10 +181,10 @@ def _cap_hit_payload(
     today: date,
     lift_active: bool,
     lift_expires_at_iso: str | None,
-) -> dict:
+) -> dict[str, Any]:
     """Build the canonical 402 `tourniquet_cap_hit` payload."""
     resets_at = (
-        datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+        datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
         + timedelta(days=1)
     )
     currency = settings.display_currency
@@ -203,10 +207,13 @@ def _cap_hit_payload(
 
 
 @router.post("/v1/messages", response_model=None)
-async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
+async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse | Response:
     auth_header = request.headers.get("authorization", "")
     if not auth_header:
-        raise HTTPException(status_code=401, detail={"type": "invalid_token", "message": "Missing Authorization header."})
+        raise HTTPException(
+            status_code=401,
+            detail={"type": "invalid_token", "message": "Missing Authorization header."},
+        )
 
     # M4 — bound the in-memory body read. `await request.body()` would buffer
     # an unbounded payload into memory; on Tailscale / cloud-VM deploys a
@@ -225,7 +232,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
     async with get_session() as session:
         api_key = await _resolve_api_key(auth_header, session)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today = date.today()
         cap_cents = _effective_cap(api_key, now)
         lift_active = (
@@ -233,7 +240,11 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
             and api_key.lift_expires_at is not None
             and api_key.lift_expires_at > now
         )
-        lift_expires_at_iso = api_key.lift_expires_at.isoformat() if lift_active else None
+        lift_expires_at_iso = (
+            api_key.lift_expires_at.isoformat()
+            if lift_active and api_key.lift_expires_at is not None
+            else None
+        )
 
         # Single body parse — used for metadata, streaming detection, and worst-case cost.
         try:
@@ -404,7 +415,7 @@ async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse:
             spent_other = spent_cents_with_reservation - reserved_cents
             return is_over_cap(spent_other + c, cap_cents)
 
-        async def _generate():
+        async def _generate() -> AsyncIterator[bytes]:
             nonlocal accumulated
             cap_was_hit = False
 

@@ -16,16 +16,19 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import os
 import secrets
 import sys
 import threading
 import webbrowser
+from collections.abc import Callable
+from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from tourniquet import __version__
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +41,7 @@ def _generate_secret_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode()
 
 
-def _lookup_key_by_name(name: str):
+def _lookup_key_by_name(name: str) -> Any:
     """Look up an ApiKey by exact name. Returns None if not found.
 
     Used by `test-alerts --key NAME` to bind the synthetic alert to a real
@@ -54,7 +57,7 @@ def _lookup_key_by_name(name: str):
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
 
-    async def _run():
+    async def _run() -> Any:
         async with get_session() as s:
             return (
                 await s.execute(select(ApiKey).where(ApiKey.name == name))
@@ -66,7 +69,9 @@ def _lookup_key_by_name(name: str):
         return None
 
 
-def _patch_env_value(lines: list[str], key: str, generator) -> tuple[list[str], bool]:
+def _patch_env_value(
+    lines: list[str], key: str, generator: Callable[[], str]
+) -> tuple[list[str], bool]:
     out: list[str] = []
     changed = False
     for line in lines:
@@ -166,10 +171,10 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
     from cryptography.fernet import Fernet
     from sqlalchemy import select
 
+    from tourniquet.billing.formatting import format_money, from_major_units
     from tourniquet.config import settings
     from tourniquet.db import engine, get_session
     from tourniquet.models import ApiKey, Base, User
-    from tourniquet.billing.formatting import format_money, from_major_units
 
     anthropic_key = input("Anthropic key (sk-ant-...): ").strip()
     if not anthropic_key.startswith("sk-ant-"):
@@ -242,7 +247,8 @@ def cmd_status(_args: argparse.Namespace) -> None:
             for k in keys:
                 spent = await get_today_spend(k.id, today, session)
                 cur = settings.display_currency
-                print(f"{k.name:<20} {format_money(spent, cur):>10} {format_money(k.daily_cap_usd_cents, cur):>10}")
+                cap_str = format_money(k.daily_cap_usd_cents, cur)
+                print(f"{k.name:<20} {format_money(spent, cur):>10} {cap_str:>10}")
 
     asyncio.run(_run())
 
@@ -269,12 +275,13 @@ def cmd_test(args: argparse.Namespace) -> None:
     import httpx
 
     is_tty = sys.stdout.isatty()
-    GREEN = "\033[32m" if is_tty else ""
-    RED = "\033[31m" if is_tty else ""
-    YELLOW = "\033[33m" if is_tty else ""
-    DIM = "\033[2m" if is_tty else ""
-    BOLD = "\033[1m" if is_tty else ""
-    RESET = "\033[0m" if is_tty else ""
+    # ANSI color constants — uppercase by convention.
+    GREEN = "\033[32m" if is_tty else ""  # noqa: N806
+    RED = "\033[31m" if is_tty else ""  # noqa: N806
+    YELLOW = "\033[33m" if is_tty else ""  # noqa: N806
+    DIM = "\033[2m" if is_tty else ""  # noqa: N806
+    BOLD = "\033[1m" if is_tty else ""  # noqa: N806
+    RESET = "\033[0m" if is_tty else ""  # noqa: N806
 
     token = args.token or os.environ.get("ANTHROPIC_API_KEY", "")
     base_url = args.base_url or os.environ.get("ANTHROPIC_BASE_URL", "http://127.0.0.1:8787")
@@ -316,14 +323,18 @@ def cmd_test(args: argparse.Namespace) -> None:
     if resp.status_code == 402:
         body = resp.json().get("error", {})
         kind = body.get("type", "")
-        print(f"{YELLOW}🛑 PRE-FLIGHT BLOCKED{RESET} — Tourniquet stopped this before it reached Anthropic.")
+        print(
+            f"{YELLOW}🛑 PRE-FLIGHT BLOCKED{RESET} — "
+            "Tourniquet stopped this before it reached Anthropic."
+        )
         print(f"  Type     : {kind}")
         print(f"  Reason   : {body.get('message', '?')}")
         if "display" in body:
             d = body["display"]
             print(f"  Today    : {d.get('spent', '?')} of {d.get('cap', '?')}")
             if "projected" in d:
-                print(f"  Projected: {d.get('projected', '?')} (over by {d.get('overage', d.get('tolerance', '?'))})")
+                overage = d.get("overage", d.get("tolerance", "?"))
+                print(f"  Projected: {d.get('projected', '?')} (over by {overage})")
         if body.get("lift_active"):
             print(f"  Lift active until {body.get('lift_expires_at', '?')}")
         print()
@@ -371,7 +382,10 @@ def cmd_test(args: argparse.Namespace) -> None:
     print(f"  {BOLD}Claude said{RESET}  {GREEN}{text!r}{RESET}")
     print()
     print(f"  {BOLD}Tokens{RESET}       {in_tokens} in  /  {out_tokens} out")
-    print(f"  {BOLD}Cost{RESET}         {cost_str}  {DIM}(billed against your tq_ key's cap){RESET}")
+    print(
+        f"  {BOLD}Cost{RESET}         {cost_str}  "
+        f"{DIM}(billed against your tq_ key's cap){RESET}"
+    )
     print(bar)
     print(f"  {DIM}Open the dashboard to see this request in the live spend bar:{RESET}")
     print(f"  {base_url.replace('/v1/messages', '')}/dashboard")
@@ -427,11 +441,12 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
     )
 
     is_tty = sys.stdout.isatty()
-    GREEN = "\033[32m" if is_tty else ""
-    RED = "\033[31m" if is_tty else ""
-    DIM = "\033[2m" if is_tty else ""
-    BOLD = "\033[1m" if is_tty else ""
-    RESET = "\033[0m" if is_tty else ""
+    # ANSI color constants — uppercase by convention.
+    GREEN = "\033[32m" if is_tty else ""  # noqa: N806
+    RED = "\033[31m" if is_tty else ""  # noqa: N806
+    DIM = "\033[2m" if is_tty else ""  # noqa: N806
+    BOLD = "\033[1m" if is_tty else ""  # noqa: N806
+    RESET = "\033[0m" if is_tty else ""  # noqa: N806
 
     label = "cap-hit" if threshold == -1 else f"{threshold}%"
     monitor_str = (
@@ -504,7 +519,7 @@ def cmd_test_alerts(args: argparse.Namespace) -> None:
 
 def cmd_lift(args: argparse.Namespace) -> None:
     import asyncio
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import select
 
@@ -522,15 +537,16 @@ def cmd_lift(args: argparse.Namespace) -> None:
             if not key:
                 print(f"ERROR: no key named {args.key!r}", file=sys.stderr)
                 sys.exit(1)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             tomorrow = now.date() + timedelta(days=1)
-            expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
+            expires_at = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=UTC)
             raw = int(key.daily_cap_usd_cents * args.multiplier)
             lifted = min(raw, key.absolute_ceiling_usd_cents)
             key.lifted_cap_usd_cents = lifted
             key.lift_expires_at = expires_at
             await session.commit()
-            print(f"Cap lifted to {format_money(lifted, settings.display_currency)} until midnight UTC.")
+            lifted_str = format_money(lifted, settings.display_currency)
+            print(f"Cap lifted to {lifted_str} until midnight UTC.")
 
     asyncio.run(_run())
 
@@ -540,10 +556,8 @@ def cmd_lift(args: argparse.Namespace) -> None:
 def main() -> None:
     # Windows: force UTF-8 on stdout so banner characters don't crash cmd.exe
     if sys.platform == "win32":
-        try:
+        with contextlib.suppress(AttributeError, OSError):
             sys.stdout.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
     parser = argparse.ArgumentParser(
         prog="tourniquet",
@@ -576,7 +590,11 @@ def main() -> None:
     # test — pretty smoke test
     p_test = sub.add_parser("test", help="Send a test request through the proxy and pretty-print")
     p_test.add_argument("--token", help="tq_ token (default: $ANTHROPIC_API_KEY)")
-    p_test.add_argument("--base-url", dest="base_url", help="Proxy URL (default: $ANTHROPIC_BASE_URL or 127.0.0.1:8787)")
+    p_test.add_argument(
+        "--base-url",
+        dest="base_url",
+        help="Proxy URL (default: $ANTHROPIC_BASE_URL or 127.0.0.1:8787)",
+    )
     p_test.add_argument("--message", default="say hi in 5 words", help="Prompt content")
     p_test.add_argument("--model", default="claude-haiku-4-5-20251001", help="Model ID")
 

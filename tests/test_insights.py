@@ -7,9 +7,9 @@ by_metadata_user_id tests skip gracefully rather than fail hard.
 
 from __future__ import annotations
 
-import importlib
+import contextlib
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -35,19 +35,16 @@ async def session() -> AsyncSession:
         await conn.run_sync(Base.metadata.create_all)
         # Add optional columns if they exist on the ORM model but weren't in initial schema
         if HAS_USER_AGENT:
-            try:
+            # column already exists
+            with contextlib.suppress(Exception):
                 await conn.execute(
                     text("ALTER TABLE usage_events ADD COLUMN user_agent VARCHAR(255)")
                 )
-            except Exception:
-                pass  # column already exists
         if HAS_METADATA_USER_ID:
-            try:
+            with contextlib.suppress(Exception):
                 await conn.execute(
                     text("ALTER TABLE usage_events ADD COLUMN metadata_user_id VARCHAR(255)")
                 )
-            except Exception:
-                pass
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
@@ -94,7 +91,7 @@ def _event(
         output_tokens=output_tokens,
         cost_usd_cents=cost,
         cap_hit=cap_hit,
-        created_at=created_at or datetime.now(timezone.utc),
+        created_at=created_at or datetime.now(UTC),
     )
     if HAS_USER_AGENT and user_agent is not None:
         ev.user_agent = user_agent
@@ -118,7 +115,6 @@ def test_no_network_imports():
         )
 
     # Stronger check: reload from source and assert no forbidden name in imports
-    import importlib.util
     import inspect
     source = inspect.getsource(mod)
     for name in forbidden:
@@ -141,7 +137,7 @@ async def test_totals_add_up(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.add(_event(key.id, 300, model="claude-opus-4-7", created_at=now - timedelta(hours=1)))
     session.add(_event(key.id, 200, model="claude-sonnet-4-6", created_at=now - timedelta(hours=2)))
     session.add(_event(key.id, 100, model="claude-haiku-4-5", created_at=now - timedelta(hours=3)))
@@ -162,7 +158,7 @@ async def test_by_model_sorted_descending(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.add(_event(key.id, 50, model="claude-haiku-4-5", created_at=now - timedelta(hours=1)))
     session.add(_event(key.id, 500, model="claude-opus-4-7", created_at=now - timedelta(hours=2)))
     session.add(_event(key.id, 200, model="claude-sonnet-4-6", created_at=now - timedelta(hours=3)))
@@ -183,8 +179,14 @@ async def test_biggest_request(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
-    big = _event(key.id, 999, model="claude-opus-4-7", input_tokens=200_000, created_at=now - timedelta(hours=1))
+    now = datetime.now(UTC)
+    big = _event(
+        key.id,
+        999,
+        model="claude-opus-4-7",
+        input_tokens=200_000,
+        created_at=now - timedelta(hours=1),
+    )
     small = _event(key.id, 10, model="claude-haiku-4-5", created_at=now - timedelta(hours=2))
     session.add(big)
     session.add(small)
@@ -205,7 +207,7 @@ async def test_biggest_request_pct(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.add(_event(key.id, 400, created_at=now - timedelta(hours=1)))
     session.add(_event(key.id, 600, created_at=now - timedelta(hours=2)))
     await session.commit()
@@ -228,7 +230,7 @@ async def test_by_caller_groups_by_user_agent(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.add(_event(key.id, 300, user_agent="Claude Code", created_at=now - timedelta(hours=1)))
     session.add(_event(key.id, 200, user_agent="Claude Code", created_at=now - timedelta(hours=2)))
     session.add(_event(key.id, 100, user_agent=None, created_at=now - timedelta(hours=3)))
@@ -257,10 +259,16 @@ async def test_by_metadata_user_id(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
-    session.add(_event(key.id, 400, metadata_user_id="task-001", created_at=now - timedelta(hours=1)))
-    session.add(_event(key.id, 200, metadata_user_id="task-002", created_at=now - timedelta(hours=2)))
-    session.add(_event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3)))
+    now = datetime.now(UTC)
+    session.add(
+        _event(key.id, 400, metadata_user_id="task-001", created_at=now - timedelta(hours=1))
+    )
+    session.add(
+        _event(key.id, 200, metadata_user_id="task-002", created_at=now - timedelta(hours=2))
+    )
+    session.add(
+        _event(key.id, 50, metadata_user_id=None, created_at=now - timedelta(hours=3))
+    )
     await session.commit()
 
     report = await compute_insights(key.id, days=7, session=session)
@@ -281,12 +289,16 @@ async def test_suggestion_top_caller_rule(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # big-spender is 80% of total
     for _ in range(8):
-        session.add(_event(key.id, 100, user_agent="big-spender", created_at=now - timedelta(hours=1)))
+        session.add(
+            _event(key.id, 100, user_agent="big-spender", created_at=now - timedelta(hours=1))
+        )
     for _ in range(2):
-        session.add(_event(key.id, 100, user_agent="small-spender", created_at=now - timedelta(hours=2)))
+        session.add(
+            _event(key.id, 100, user_agent="small-spender", created_at=now - timedelta(hours=2))
+        )
     await session.commit()
 
     report = await compute_insights(key.id, days=7, session=session)
@@ -304,8 +316,16 @@ async def test_suggestion_biggest_request_rule(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
-    session.add(_event(key.id, 800, model="claude-opus-4-7", input_tokens=100_000, created_at=now - timedelta(hours=1)))
+    now = datetime.now(UTC)
+    session.add(
+        _event(
+            key.id,
+            800,
+            model="claude-opus-4-7",
+            input_tokens=100_000,
+            created_at=now - timedelta(hours=1),
+        )
+    )
     session.add(_event(key.id, 100, created_at=now - timedelta(hours=2)))
     session.add(_event(key.id, 100, created_at=now - timedelta(hours=3)))
     await session.commit()
@@ -325,7 +345,7 @@ async def test_suggestion_cap_hit_rule(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # 4 separate days with cap_hit=True
     for day_offset in range(4):
         ts = now - timedelta(days=day_offset + 1)
@@ -348,7 +368,7 @@ async def test_suggestion_opus_rule(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # 70% opus
     session.add(_event(key.id, 700, model="claude-opus-4-7", created_at=now - timedelta(hours=1)))
     session.add(_event(key.id, 300, model="claude-haiku-4-5", created_at=now - timedelta(hours=2)))
@@ -388,7 +408,7 @@ async def test_events_outside_window_excluded(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # inside window
     session.add(_event(key.id, 100, created_at=now - timedelta(days=3)))
     # outside window (8 days ago for a 7-day window)
@@ -408,7 +428,7 @@ async def test_cap_hit_days_prior_window(session: AsyncSession):
     key = _make_key(session)
     await session.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # current window (last 7 days): 2 cap-hit days
     session.add(_event(key.id, 100, cap_hit=True, created_at=now - timedelta(days=1)))
     session.add(_event(key.id, 100, cap_hit=True, created_at=now - timedelta(days=3)))

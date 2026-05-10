@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tourniquet.proxy.router import _effective_cap
-
 
 # ── Model stubs ────────────────────────────────────────────────────────────────
 
@@ -41,38 +40,38 @@ def _make_key(
 def test_effective_cap_no_lift():
     """Returns base cap when no lift is set."""
     key = _make_key(daily_cap=500)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _effective_cap(key, now) == 500
 
 
 def test_effective_cap_active_lift():
     """Returns lifted cap when lift_expires_at is in the future."""
-    future = datetime.now(timezone.utc) + timedelta(hours=4)
+    future = datetime.now(UTC) + timedelta(hours=4)
     key = _make_key(daily_cap=500, lifted_cap=1000, lift_expires_at=future)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _effective_cap(key, now) == 1000
 
 
 def test_effective_cap_expired_lift():
     """Returns base cap when lift_expires_at is in the past."""
-    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    past = datetime.now(UTC) - timedelta(hours=1)
     key = _make_key(daily_cap=500, lifted_cap=1000, lift_expires_at=past)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _effective_cap(key, now) == 500
 
 
 def test_effective_cap_lift_but_no_expiry():
     """Returns base cap when lifted_cap is set but lift_expires_at is None."""
     key = _make_key(daily_cap=500, lifted_cap=1000, lift_expires_at=None)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _effective_cap(key, now) == 500
 
 
 def test_effective_cap_expiry_but_no_amount():
     """Returns base cap when lift_expires_at is set but lifted_cap is None."""
-    future = datetime.now(timezone.utc) + timedelta(hours=4)
+    future = datetime.now(UTC) + timedelta(hours=4)
     key = _make_key(daily_cap=500, lifted_cap=None, lift_expires_at=future)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _effective_cap(key, now) == 500
 
 
@@ -170,7 +169,7 @@ def test_lift_endpoint_ceiling_clamp(client):
 
 def test_unlift_clears_columns(client):
     """POST /admin/unlift clears lifted_cap_usd_cents and lift_expires_at."""
-    future = datetime.now(timezone.utc) + timedelta(hours=4)
+    future = datetime.now(UTC) + timedelta(hours=4)
     fake_key = _build_fake_db_key(daily_cap=500, absolute_ceiling=2000)
     fake_key.lifted_cap_usd_cents = 1000
     fake_key.lift_expires_at = future

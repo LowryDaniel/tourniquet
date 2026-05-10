@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +11,6 @@ from itsdangerous import URLSafeTimedSerializer
 
 from tourniquet.config import settings
 from tourniquet.routes.admin import build_kill_now_url, router
-
 
 # ── Token signing / verification ───────────────────────────────────────────────
 
@@ -36,8 +34,8 @@ def test_kill_now_token_is_verifiable():
 
 def test_expired_token_rejected():
     """A token signed with a timestamp in the past is rejected as expired."""
+
     from itsdangerous import SignatureExpired
-    import time
 
     key_id = str(uuid.uuid4())
     s = URLSafeTimedSerializer(settings.secret_key, salt="kill-now")

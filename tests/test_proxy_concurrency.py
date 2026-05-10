@@ -26,6 +26,7 @@ reproduce that.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
@@ -44,7 +45,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tourniquet.config import settings as app_settings
 from tourniquet.models import ApiKey, Base
-
 
 # ── Test infra: real SQLite with schema, real ApiKey row ──────────────────────
 
@@ -65,10 +65,8 @@ async def db_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
-    try:
+    with contextlib.suppress(OSError):
         os.unlink(path)
-    except OSError:
-        pass
 
 
 @pytest_asyncio.fixture()
@@ -301,15 +299,15 @@ async def test_streaming_reservation_reconciles_overestimate(
 
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_stream","model":"claude-haiku-4-5-20251001","usage":{"input_tokens":2500}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_stream","model":"claude-haiku-4-5-20251001","usage":{"input_tokens":2500}}}\n\n'  # noqa: E501
         'event: content_block_start\n'
-        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'  # noqa: E501
         'event: content_block_delta\n'
-        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'  # noqa: E501
         'event: content_block_stop\n'
         'data: {"type":"content_block_stop","index":0}\n\n'
         'event: message_delta\n'
-        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2500}}\n\n'
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2500}}\n\n'  # noqa: E501
         'event: message_stop\n'
         'data: {"type":"message_stop"}\n\n'
     )
@@ -335,22 +333,21 @@ async def test_streaming_reservation_reconciles_overestimate(
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport, base_url="http://testserver", timeout=30.0
-        ) as client:
-            async with client.stream(
-                "POST",
-                "/v1/messages",
-                content=request_body,
-                headers={
-                    "authorization": f"Bearer {seeded_key['token']}",
-                    "content-type": "application/json",
-                },
-            ) as resp:
-                # Drain the SSE so the proxy's _generate() finishes and runs
-                # the post-stream reconcile path.
-                body_bytes = b""
-                async for chunk in resp.aiter_bytes():
-                    body_bytes += chunk
-                assert resp.status_code == 200, body_bytes
+        ) as client, client.stream(
+            "POST",
+            "/v1/messages",
+            content=request_body,
+            headers={
+                "authorization": f"Bearer {seeded_key['token']}",
+                "content-type": "application/json",
+            },
+        ) as resp:
+            # Drain the SSE so the proxy's _generate() finishes and runs
+            # the post-stream reconcile path.
+            body_bytes = b""
+            async for chunk in resp.aiter_bytes():
+                body_bytes += chunk
+            assert resp.status_code == 200, body_bytes
 
     # Compute expectations with the same pricing function the production code uses.
     from tourniquet.billing.pricing import cost_usd_cents

@@ -8,9 +8,11 @@ See docs/architecture.md for the full schema rationale.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -20,12 +22,11 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.types import CHAR, TypeDecorator
 
 
-class _UUIDType(TypeDecorator):
+class _UUIDType(TypeDecorator[uuid.UUID]):
     """UUID column portable across Postgres and SQLite.
 
     Stored as CHAR(36) string in SQLite, native UUID in Postgres.
@@ -33,20 +34,20 @@ class _UUIDType(TypeDecorator):
     impl = CHAR
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Any) -> Any:
         if dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import UUID as PG_UUID
             return dialect.type_descriptor(PG_UUID())
         return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
         if value is None:
             return None
         if dialect.name == "postgresql":
             return value
         return str(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> uuid.UUID | None:
         if value is None:
             return None
         if isinstance(value, uuid.UUID):
@@ -71,14 +72,18 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    api_keys: Mapped[list[ApiKey]] = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+    api_keys: Mapped[list[ApiKey]] = relationship(
+        "ApiKey", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     tq_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
     # SHA-256 hex of the raw tq_* token. Indexed unique so the proxy auth
@@ -98,20 +103,30 @@ class ApiKey(Base):
     absolute_ceiling_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
     # 10000 cents = $100/day default ceiling. Auto-tune creep can never exceed this.
     lifted_cap_usd_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
-    lift_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    lift_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship("User", back_populates="api_keys")
-    usage_events: Mapped[list[UsageEvent]] = relationship("UsageEvent", back_populates="api_key", cascade="all, delete-orphan")
-    triggers: Mapped[list[Trigger]] = relationship("Trigger", back_populates="api_key", cascade="all, delete-orphan")
-    cap_today: Mapped[CapToday | None] = relationship("CapToday", back_populates="api_key", uselist=False)
+    usage_events: Mapped[list[UsageEvent]] = relationship(
+        "UsageEvent", back_populates="api_key", cascade="all, delete-orphan"
+    )
+    triggers: Mapped[list[Trigger]] = relationship(
+        "Trigger", back_populates="api_key", cascade="all, delete-orphan"
+    )
+    cap_today: Mapped[CapToday | None] = relationship(
+        "CapToday", back_populates="api_key", uselist=False
+    )
 
 
 class UsageEvent(Base):
     __tablename__ = "usage_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False
+    )
     request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -131,9 +146,11 @@ class Trigger(Base):
     __tablename__ = "triggers"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(), primary_key=True, default=uuid.uuid4)
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False)
-    condition_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    actions_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False
+    )
+    condition_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    actions_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -149,7 +166,9 @@ class CapToday(Base):
 
     __tablename__ = "caps_today"
 
-    api_key_id: Mapped[uuid.UUID] = mapped_column(UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), primary_key=True)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), primary_key=True
+    )
     date: Mapped[date] = mapped_column(Date, nullable=False, primary_key=True)
     total_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -186,6 +205,6 @@ class ApiKeyAction(Base):
     action: Mapped[str] = mapped_column(String(40), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     api_key: Mapped[ApiKey] = relationship("ApiKey")

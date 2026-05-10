@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import pathlib
-import sys
 from datetime import date
 from unittest.mock import MagicMock, patch
 
@@ -208,6 +207,7 @@ async def test_desktop_notification_uses_plyer_on_win32() -> None:
         patch.dict("sys.modules", {"plyer": mock_plyer}),
     ):
         from importlib import reload
+
         import tourniquet.alerts.desktop as desktop_mod
         reload(desktop_mod)
         await desktop_mod.send_desktop_notification("T", "M")
@@ -236,6 +236,7 @@ async def test_desktop_notification_no_op_when_plyer_missing() -> None:
         patch("builtins.__import__", side_effect=_fake_import),
     ):
         from importlib import reload
+
         import tourniquet.alerts.desktop as desktop_mod
         reload(desktop_mod)
         # Must not raise
@@ -246,20 +247,9 @@ async def test_desktop_notification_no_op_when_plyer_missing() -> None:
 
 def test_kill_now_url_included_when_kill_disabled():
     """fan_out with kill_enabled=False must attach a kill_now_url to the event."""
-    from unittest.mock import patch as _patch
 
-    import dataclasses
     from tourniquet.alerts.notifier import _build_kill_now_url
 
-    event = AlertEvent(
-        api_key_name="ojw-swarm",
-        threshold_pct=80,
-        spent_usd_cents=420,
-        cap_usd_cents=500,
-        display_currency="GBP",
-        today=date(2026, 5, 6),
-        api_key_id="abc-123",
-    )
     # Verify the URL builder produces a URL containing the key_id
     url = _build_kill_now_url("abc-123")
     assert "abc-123" in url
@@ -289,7 +279,7 @@ def test_format_message_text_is_consistent_regardless_of_kill_url():
     rows, not in the message prose. This keeps the canonical alert text
     identical across every delivery method (Slack/Telegram/email/desktop/JSONL).
     """
-    from tourniquet.alerts.notifier import _format_message, AlertEvent
+    from tourniquet.alerts.notifier import AlertEvent, _format_message
 
     base = AlertEvent(
         api_key_name="ojw-swarm",
@@ -319,7 +309,7 @@ def test_format_message_text_is_consistent_regardless_of_kill_url():
 
 def test_format_message_no_kill_hint_without_url():
     """_format_message does not add kill hint when kill_now_url is None."""
-    from tourniquet.alerts.notifier import _format_message, AlertEvent
+    from tourniquet.alerts.notifier import AlertEvent, _format_message
 
     event = AlertEvent(
         api_key_name="ojw-swarm",
@@ -433,17 +423,17 @@ async def test_webhook_url_not_in_logs(
     respx.post(secret_url).mock(return_value=Response(500, text="fail"))
 
     import logging
-    with caplog.at_level(logging.WARNING, logger="tourniquet.alerts.slack"):
-        with (
-            patch("tourniquet.config.settings.slack_webhook_url", secret_url),
-            patch("tourniquet.config.settings.telegram_bot_token", ""),
-            patch("tourniquet.config.settings.telegram_chat_id", ""),
-            patch("tourniquet.config.settings.alert_webhook_url", ""),
-            patch("tourniquet.config.settings.enable_mac_notifications", False),
-            patch("tourniquet.config.settings.enable_desktop_notifications", False),
-            patch("tourniquet.config.settings.resend_api_key", ""),
-        ):
-            await fan_out(base_event)
+    with (
+        caplog.at_level(logging.WARNING, logger="tourniquet.alerts.slack"),
+        patch("tourniquet.config.settings.slack_webhook_url", secret_url),
+        patch("tourniquet.config.settings.telegram_bot_token", ""),
+        patch("tourniquet.config.settings.telegram_chat_id", ""),
+        patch("tourniquet.config.settings.alert_webhook_url", ""),
+        patch("tourniquet.config.settings.enable_mac_notifications", False),
+        patch("tourniquet.config.settings.enable_desktop_notifications", False),
+        patch("tourniquet.config.settings.resend_api_key", ""),
+    ):
+        await fan_out(base_event)
 
     full_log = " ".join(r.message for r in caplog.records)
     assert "SECRET_TOKEN_HERE" not in full_log
@@ -502,6 +492,7 @@ class TestSelectThreshold:
 async def test_maybe_fire_threshold_alert_records_audit_and_dispatches():
     from datetime import date as _date
     from unittest.mock import AsyncMock, MagicMock
+
     from tourniquet.alerts.notifier import maybe_fire_threshold_alert
 
     api_key = MagicMock()
@@ -547,6 +538,7 @@ async def test_maybe_fire_threshold_alert_no_op_when_already_fired():
     """If the audit log already has an 80% alert today, don't refire."""
     from datetime import date as _date
     from unittest.mock import AsyncMock, MagicMock
+
     from tourniquet.alerts.notifier import maybe_fire_threshold_alert
 
     api_key = MagicMock()
@@ -582,6 +574,7 @@ async def test_maybe_fire_threshold_alert_cap_hit_with_kill_offers_recovery():
     the channels render +$N bump buttons."""
     from datetime import date as _date
     from unittest.mock import AsyncMock, MagicMock
+
     from tourniquet.alerts.notifier import maybe_fire_threshold_alert
 
     api_key = MagicMock()
@@ -620,6 +613,7 @@ async def test_fan_out_task_is_referenced():
     """
     from datetime import date as _date
     from unittest.mock import AsyncMock, MagicMock
+
     from tourniquet.alerts.notifier import (
         _pending_tasks,
         maybe_fire_threshold_alert,
@@ -671,6 +665,7 @@ async def test_maybe_fire_threshold_alert_monitor_mode_no_recovery():
     recovery_offer must stay False — the key isn't actually blocked."""
     from datetime import date as _date
     from unittest.mock import AsyncMock, MagicMock
+
     from tourniquet.alerts.notifier import maybe_fire_threshold_alert
 
     api_key = MagicMock()

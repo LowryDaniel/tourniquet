@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
 from sqlalchemy import text
@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tourniquet.billing.formatting import format_money
 from tourniquet.config import settings
 from tourniquet.models import UsageEvent
-
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -95,7 +94,7 @@ async def compute_insights(
 
     Never makes a network call. Never returns prompt content (we don't store it).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_start = now - timedelta(days=days)
     prior_start = now - timedelta(days=days * 2)
 
@@ -292,17 +291,18 @@ async def compute_insights(
         ),
         {"kid": kid, "since": window_start},
     )
-    cap_hit_days = int((cap_days_result.scalar() or 0))
+    cap_hit_days = int(cap_days_result.scalar() or 0)
 
     cap_days_prior_result = await session.execute(
         text(
             "SELECT COUNT(DISTINCT date(created_at)) "
             "FROM usage_events "
-            "WHERE api_key_id = :kid AND created_at >= :prior AND created_at < :since AND cap_hit = 1"
+            "WHERE api_key_id = :kid AND created_at >= :prior "
+            "AND created_at < :since AND cap_hit = 1"
         ),
         {"kid": kid, "prior": prior_start, "since": window_start},
     )
-    cap_hit_days_prior = int((cap_days_prior_result.scalar() or 0))
+    cap_hit_days_prior = int(cap_days_prior_result.scalar() or 0)
 
     # ── Suggestions ───────────────────────────────────────────────────────────
     suggestions: list[str] = []
@@ -320,10 +320,14 @@ async def compute_insights(
     if hottest_hour and hottest_hour.z_score > 3:
         wday = _weekday_name(hottest_hour.weekday)
         fmtcost = format_money(hottest_hour.cost_cents, currency)
-        baseline_for_bucket = baseline_map.get(  # type: ignore[possibly-undefined]
+        baseline_for_bucket = baseline_map.get(
             ((hottest_hour.weekday + 1) % 7, hottest_hour.hour), 0
         )
-        multiplier = round(hottest_hour.cost_cents / baseline_for_bucket) if baseline_for_bucket else "∞"
+        multiplier = (
+            round(hottest_hour.cost_cents / baseline_for_bucket)
+            if baseline_for_bucket
+            else "∞"
+        )
         suggestions.append(
             f"On {wday} {hottest_hour.hour:02d}:00 you spent {fmtcost} — "
             f"{multiplier}x your usual {wday} {hottest_hour.hour:02d}:00 baseline."
@@ -336,7 +340,11 @@ async def compute_insights(
             ts_str = ts.strftime("%a %H:%M") if hasattr(ts, "strftime") else str(ts)
         else:
             ts_str = "unknown time"
-        input_k = f"{biggest_request.input_tokens // 1000}k" if biggest_request.input_tokens >= 1000 else str(biggest_request.input_tokens)
+        input_k = (
+            f"{biggest_request.input_tokens // 1000}k"
+            if biggest_request.input_tokens >= 1000
+            else str(biggest_request.input_tokens)
+        )
         suggestions.append(
             f"One request on {ts_str} alone was {biggest_request_pct:.0f}% of the week's spend "
             f"({input_k} input tokens, model {biggest_request.model})."
@@ -344,7 +352,11 @@ async def compute_insights(
 
     # Rule 4: cap hit > 3 days
     if cap_hit_days > 3:
-        top_culprit = by_metadata_user_id[0].name if by_metadata_user_id else (by_caller[0].name if by_caller else "your top caller")
+        top_culprit = (
+            by_metadata_user_id[0].name
+            if by_metadata_user_id
+            else (by_caller[0].name if by_caller else "your top caller")
+        )
         suggestions.append(
             f"You hit cap {cap_hit_days} days this week (vs {cap_hit_days_prior} the prior "
             f"{days}). Consider raising the cap or investigating {top_culprit}."

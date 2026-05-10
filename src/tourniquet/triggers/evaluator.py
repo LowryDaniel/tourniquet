@@ -38,7 +38,7 @@ async def evaluate(
     if ctype == "spend_threshold_pct":
         threshold_pct = condition.get("pct", 80)
         pct = (spent_usd_cents / cap_usd_cents * 100) if cap_usd_cents else 0
-        return pct >= threshold_pct
+        return bool(pct >= threshold_pct)
 
     if ctype == "spend_3x_baseline":
         # Anomaly rule: off until W4 baseline data exists.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from typing import Any
 
 import httpx
 
@@ -22,12 +23,12 @@ async def send_webhook(message: str, event: object) -> None:
     if not settings.alert_webhook_url:
         return
 
-    raw = dataclasses.asdict(event)  # type: ignore[arg-type]
+    raw = dataclasses.asdict(event)  # type: ignore[call-overload]
     # Ensure date is JSON-serialisable
     if "today" in raw and hasattr(raw["today"], "isoformat"):
         raw["today"] = raw["today"].isoformat()
 
-    body: dict = {"message": message, "event": raw}
+    body: dict[str, Any] = {"message": message, "event": raw}
 
     # When this is a recovery offer, embed the bump amounts + signed URLs so the
     # downstream automation (Zapier, n8n, HA) can present them as actionable buttons.

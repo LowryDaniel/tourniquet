@@ -8,12 +8,13 @@ Three critical scenarios:
 
 # Tests are stubs — implementations added during W1 build.
 
+import contextlib
 import hashlib
 import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import bcrypt
 import httpx
@@ -81,7 +82,7 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
     """
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
     async def hit_immediately(acc):
@@ -89,7 +90,11 @@ async def test_streaming_cap_hit_uses_documented_stop_reason():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -126,7 +131,7 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
     """
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_cap","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
     )
 
     async def hit_immediately(acc):
@@ -134,7 +139,11 @@ async def test_streaming_cap_hit_emits_tourniquet_error_event():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -330,7 +339,6 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
     """
     import os
     import tempfile
-    from contextlib import asynccontextmanager
 
     from cryptography.fernet import Fernet
     from sqlalchemy import text
@@ -450,7 +458,5 @@ async def test_proxy_forwards_idempotency_key(monkeypatch):
         assert "secret-leak-canary" not in captured.get("user-agent", "")
     finally:
         await engine.dispose()
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(path)
-        except OSError:
-            pass

@@ -57,11 +57,11 @@ async def test_stream_passes_through_under_cap():
     """When cap-check always returns False, all bytes flow through."""
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_abc","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_abc","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'  # noqa: E501
         'event: content_block_delta\n'
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}\n\n'
         'event: message_delta\n'
-        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'  # noqa: E501
         'event: message_stop\n'
         'data: {"type":"message_stop"}\n\n'
     )
@@ -71,7 +71,11 @@ async def test_stream_passes_through_under_cap():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -101,9 +105,9 @@ async def test_stream_injects_cap_hit_event_mid_stream():
     """When cap-check returns True, synthetic message_stop is emitted and stream terminates."""
     sse_response = (
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_xyz","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_xyz","model":"claude-sonnet-4-6","usage":{"input_tokens":1000000}}}\n\n'  # noqa: E501
         'event: content_block_delta\n'
-        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"This should NOT appear"}}\n\n'
+        'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"This should NOT appear"}}\n\n'  # noqa: E501
     )
 
     async def hit_after_message_start(acc):
@@ -112,7 +116,11 @@ async def test_stream_injects_cap_hit_event_mid_stream():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -135,10 +143,10 @@ async def test_sse_parser_handles_data_without_preceding_event():
     and must not be ingested into the accumulator (M3)."""
     sse_response = (
         # Bare data line first — no preceding `event:`. The parser must skip ingest.
-        'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":999}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":999}}}\n\n'  # noqa: E501
         # Then a normal event so the rest of the stream is well-formed.
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_real","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_real","model":"claude-sonnet-4-6","usage":{"input_tokens":50}}}\n\n'  # noqa: E501
     )
 
     async def never_hit(_acc):
@@ -146,7 +154,11 @@ async def test_sse_parser_handles_data_without_preceding_event():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         chunks = []
@@ -175,14 +187,14 @@ async def test_sse_parser_resets_event_type_on_blank_line():
     sse_response = (
         # First event — message_start with input_tokens=10
         'event: message_start\n'
-        'data: {"type":"message_start","message":{"id":"msg_one","model":"claude-sonnet-4-6","usage":{"input_tokens":10}}}\n'
+        'data: {"type":"message_start","message":{"id":"msg_one","model":"claude-sonnet-4-6","usage":{"input_tokens":10}}}\n'  # noqa: E501
         '\n'
         # Blank line separates events; event_type should be reset here.
         # An orphan `data:` line should be skipped (not re-ingested as message_start).
-        'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":7777}}}\n\n'
+        'data: {"type":"message_start","message":{"id":"msg_orphan","model":"claude-sonnet-4-6","usage":{"input_tokens":7777}}}\n\n'  # noqa: E501
         # Second proper event — message_delta with output_tokens=5
         'event: message_delta\n'
-        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n'  # noqa: E501
     )
 
     async def never_hit(_acc):
@@ -190,7 +202,11 @@ async def test_sse_parser_resets_event_type_on_blank_line():
 
     with respx.mock:
         respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(200, text=sse_response, headers={"content-type": "text/event-stream"})
+            return_value=httpx.Response(
+                200,
+                text=sse_response,
+                headers={"content-type": "text/event-stream"},
+            )
         )
 
         final_acc = None
