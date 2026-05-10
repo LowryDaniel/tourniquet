@@ -21,7 +21,7 @@ import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import bcrypt
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -186,7 +186,7 @@ async def _apply_lift_by_amount(
             f"+{amt_label} bump via {source} — cap now ${new_lifted / 100:.2f} until midnight UTC"
             + (" (ceiling-clamped)" if clamped else "")
         )
-        action_details: dict = {
+        action_details: dict[str, Any] = {
             "amount_cents": amount_cents,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": new_lifted,
@@ -267,7 +267,7 @@ async def _apply_kill_now(
                 f"daily_cap preserved at ${key.daily_cap_usd_cents / 100:.2f}"
             )
         )
-        kill_details: dict = {
+        kill_details: dict[str, Any] = {
             "lifted_before_cents": previous_lifted,
             "lifted_after_cents": new_lifted,
             "daily_cap_cents_preserved": key.daily_cap_usd_cents,
@@ -341,7 +341,7 @@ async def _apply_lift(
         key.lift_expires_at = expires_at
 
         summary = f"Lift {mode} via {source} — cap now ${lifted / 100:.2f} until midnight UTC"
-        lift_mode_details: dict = {
+        lift_mode_details: dict[str, Any] = {
             "mode": mode,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": lifted,
@@ -531,6 +531,8 @@ async def lift_cap(request: Request, payload: LiftRequest) -> LiftResponse:
         )
 
         db_key = await session.get(ApiKey, api_key.id)
+        if db_key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
         db_key.lifted_cap_usd_cents = lifted_cents
         db_key.lift_expires_at = expires_at
         await session.commit()
@@ -561,6 +563,8 @@ async def unlift_cap(request: Request, payload: LiftRequest) -> UnliftResponse:
         api_key = await _resolve_and_auth(auth_header, payload.key_id, session)
 
         db_key = await session.get(ApiKey, api_key.id)
+        if db_key is None:
+            raise HTTPException(status_code=404, detail="Key not found")
         db_key.lifted_cap_usd_cents = None
         db_key.lift_expires_at = None
         await session.commit()
@@ -781,7 +785,7 @@ async def lift_mode_apply(
         key_name = key.name
 
         from tourniquet.audit import ACTION_LIFT_MODE, record_action
-        lift_mode_details: dict = {
+        lift_mode_details: dict[str, Any] = {
             "mode": mode,
             "lifted_before_cents": lifted_before,
             "lifted_after_cents": new_cap,

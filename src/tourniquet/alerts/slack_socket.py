@@ -55,7 +55,7 @@ class SlackSocketClient:
     """Open a Socket Mode WebSocket to Slack and dispatch interactive events."""
 
     def __init__(self) -> None:
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
         self._http: httpx.AsyncClient | None = None
 
@@ -135,7 +135,8 @@ class SlackSocketClient:
         if not data.get("ok"):
             log.warning("apps.connections.open failed: %s", data)
             return None
-        return data.get("url")
+        url: str | None = data.get("url")
+        return url
 
     async def _handle_socket(self, ws: Any) -> None:
         async for raw in ws:

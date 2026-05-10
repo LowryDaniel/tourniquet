@@ -19,24 +19,24 @@ from pathlib import Path
 def register_windows() -> None:
     """Write HKCU registry keys so Windows dispatches tourniquet:// URLs."""
     try:
-        import winreg  # type: ignore[import]
+        import winreg
     except ImportError:
         print("ERROR: winreg module unavailable — are you running on Windows?", flush=True)
         return
 
     base = r"Software\Classes\tourniquet"
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Tourniquet Protocol")
-        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base) as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Tourniquet Protocol")  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")  # type: ignore[attr-defined]
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell") as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "open")
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell") as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "open")  # type: ignore[attr-defined]
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open") as _:
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open") as _:  # type: ignore[attr-defined]
         pass
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, 'tourniquet handle-url "%1"')
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base + r"\shell\open\command") as key:  # type: ignore[attr-defined]
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, 'tourniquet handle-url "%1"')  # type: ignore[attr-defined]
 
     print("Registered tourniquet:// URL handler in HKCU\\Software\\Classes\\tourniquet")
 
@@ -161,7 +161,7 @@ def _do_lift(key_id: str, multiplier: float) -> int:
     async def _run() -> int:
         async with get_session() as session:
             result = await session.execute(
-                select(ApiKey).where(ApiKey.id == key_id)  # type: ignore[arg-type]
+                select(ApiKey).where(ApiKey.id == key_id)
             )
             key = result.scalar_one_or_none()
             if not key:

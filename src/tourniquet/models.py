@@ -8,7 +8,8 @@ See docs/architecture.md for the full schema rationale.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -25,7 +26,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import CHAR, TypeDecorator
 
 
-class _UUIDType(TypeDecorator):
+class _UUIDType(TypeDecorator[uuid.UUID]):
     """UUID column portable across Postgres and SQLite.
 
     Stored as CHAR(36) string in SQLite, native UUID in Postgres.
@@ -33,20 +34,20 @@ class _UUIDType(TypeDecorator):
     impl = CHAR
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Any) -> Any:
         if dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import UUID as PG_UUID
             return dialect.type_descriptor(PG_UUID())
         return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:
         if value is None:
             return None
         if dialect.name == "postgresql":
             return value
         return str(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Any) -> uuid.UUID | None:
         if value is None:
             return None
         if isinstance(value, uuid.UUID):
@@ -148,8 +149,8 @@ class Trigger(Base):
     api_key_id: Mapped[uuid.UUID] = mapped_column(
         UUID(), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False
     )
-    condition_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    actions_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    condition_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    actions_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -204,6 +205,6 @@ class ApiKeyAction(Base):
     action: Mapped[str] = mapped_column(String(40), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     api_key: Mapped[ApiKey] = relationship("ApiKey")

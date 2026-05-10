@@ -320,7 +320,7 @@ async def compute_insights(
     if hottest_hour and hottest_hour.z_score > 3:
         wday = _weekday_name(hottest_hour.weekday)
         fmtcost = format_money(hottest_hour.cost_cents, currency)
-        baseline_for_bucket = baseline_map.get(  # type: ignore[possibly-undefined]
+        baseline_for_bucket = baseline_map.get(
             ((hottest_hour.weekday + 1) % 7, hottest_hour.hour), 0
         )
         multiplier = (

@@ -109,4 +109,4 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
 
 
-settings = Settings()  # type: ignore[call-arg]
+settings = Settings()

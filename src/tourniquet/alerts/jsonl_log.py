@@ -23,7 +23,7 @@ def _write_jsonl_sync(event: object, message: str) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "alerts.jsonl"
 
-    raw = dataclasses.asdict(event)  # type: ignore[arg-type]
+    raw = dataclasses.asdict(event)  # type: ignore[call-overload]
     if "today" in raw and hasattr(raw["today"], "isoformat"):
         raw["today"] = raw["today"].isoformat()
 

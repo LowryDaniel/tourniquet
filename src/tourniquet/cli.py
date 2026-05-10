@@ -23,8 +23,10 @@ import secrets
 import sys
 import threading
 import webbrowser
+from collections.abc import Callable
 from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from tourniquet import __version__
 
@@ -39,7 +41,7 @@ def _generate_secret_key() -> str:
     return base64.b64encode(secrets.token_bytes(32)).decode()
 
 
-def _lookup_key_by_name(name: str):
+def _lookup_key_by_name(name: str) -> Any:
     """Look up an ApiKey by exact name. Returns None if not found.
 
     Used by `test-alerts --key NAME` to bind the synthetic alert to a real
@@ -55,7 +57,7 @@ def _lookup_key_by_name(name: str):
     from tourniquet.db import get_session
     from tourniquet.models import ApiKey
 
-    async def _run():
+    async def _run() -> Any:
         async with get_session() as s:
             return (
                 await s.execute(select(ApiKey).where(ApiKey.name == name))
@@ -67,7 +69,9 @@ def _lookup_key_by_name(name: str):
         return None
 
 
-def _patch_env_value(lines: list[str], key: str, generator) -> tuple[list[str], bool]:
+def _patch_env_value(
+    lines: list[str], key: str, generator: Callable[[], str]
+) -> tuple[list[str], bool]:
     out: list[str] = []
     changed = False
     for line in lines:

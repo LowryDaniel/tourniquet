@@ -237,4 +237,4 @@ async def get_rolling_avg_from_db(
     if not rows:
         return 0
     total = sum(row[1] for row in rows)
-    return math.ceil(total / days)
+    return int(math.ceil(total / days))

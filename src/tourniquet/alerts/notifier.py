@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 # Strong references to background fan_out tasks. asyncio.create_task only
 # returns a weak-referenced task; without holding it here the GC can cancel
 # the dispatch mid-flight. Tasks discard themselves via add_done_callback.
-_pending_tasks: set[asyncio.Task] = set()
+_pending_tasks: set[asyncio.Task[Any]] = set()
 
 
 @dataclasses.dataclass
@@ -244,7 +244,7 @@ async def maybe_fire_threshold_alert(
         # Background dispatch — proxy returns to the user without waiting.
         # `fan_out` itself returns per-channel statuses but we don't need them
         # here; logs from each channel will surface failures.
-        async def _dispatch():
+        async def _dispatch() -> None:
             try:
                 await fan_out(event, kill_enabled=kill_enabled)
             except Exception:

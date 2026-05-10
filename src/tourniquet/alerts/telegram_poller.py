@@ -40,7 +40,7 @@ class TelegramPoller:
     """
 
     def __init__(self) -> None:
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
         self._client: httpx.AsyncClient | None = None
         self._offset = 0  # next update_id to fetch
@@ -125,7 +125,8 @@ class TelegramPoller:
         assert self._client is not None
         url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}"
         r = await self._client.post(url, json=kwargs)
-        return r.json()
+        result: dict[str, Any] = r.json()
+        return result
 
     async def _answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
         """Dismiss the loading spinner on the user's button after we've processed the tap."""

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid as _uuid_mod
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
@@ -139,7 +140,7 @@ async def _apply_kill_now_from_callback(key_id: str) -> None:
 
 
 @router.post("/callback")
-async def telegram_callback(request: Request) -> dict:
+async def telegram_callback(request: Request) -> dict[str, Any]:
     """Telegram sends an Update object when a user taps an inline button.
 
     Verify it's from our bot via the X-Telegram-Bot-Api-Secret-Token header,
@@ -151,7 +152,7 @@ async def telegram_callback(request: Request) -> dict:
         if incoming != secret:
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-    update: dict = await request.json()
+    update: dict[str, Any] = await request.json()
 
     callback_query = update.get("callback_query") or {}
     data: str = callback_query.get("data", "")
