@@ -1,5 +1,13 @@
 # Errors & fixes
 
+## 2026-06-11 — Stale index.lock blocked all commits since Jun 9; stranded work finally committed
+
+**What failed:** Every `git commit` failed with `Unable to create .git/index.lock: File exists`. The lock dated Jun 9 20:18 — a crashed commit attempt — meaning the migration fix the entry below describes could not have been committed even when a session tried.
+
+**Root cause:** Crashed git process left `.git/index.lock` behind; no session since noticed because none attempted a commit (the aspirational-shipped pattern hid it).
+
+**Fix:** Verified no live git process, removed the stale lock, committed everything in `32c39df` (migrate.py, tests, kit files). Resolves the 2026-06-09 entry below: the fix is now committed. Still unverified: deployment to tourniquet.dev (see HANDOFF.md).
+
 ## 2026-06-09 — ERRORS.md documents unshipped migration fix
 
 **What failed:** The 2026-05-12 ERRORS.md entry claims a long-term fix was shipped: `src/tourniquet/migrate.py` created, `create_all` replaced with programmatic `alembic upgrade head` in `main.py`, `cli.py`, `scripts/init.py`, `scripts/bootstrap_local.py`, and `tests/test_migrations_sqlite.py` added. OJW review on 2026-06-09 found none of this exists in the working tree or git log. The entry was aspirational — written as if the fix were complete, but never committed.
