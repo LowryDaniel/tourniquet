@@ -37,23 +37,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from tourniquet.billing.formatting import format_money, from_major_units  # noqa: E402
 from tourniquet.config import settings  # noqa: E402
-from tourniquet.db import engine, get_session  # noqa: E402
-from tourniquet.models import ApiKey, Base, User  # noqa: E402
+from tourniquet.db import get_session  # noqa: E402
+from tourniquet.models import ApiKey, User  # noqa: E402
 
 
 def _make_tq_token() -> str:
     return f"tq_{secrets.token_urlsafe(32)}"
 
 
-async def _ensure_schema() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+def _ensure_schema() -> None:
+    from tourniquet.migrate import upgrade_to_head
+
+    upgrade_to_head(settings.database_url)
 
 
 async def _bootstrap(
     email: str, name: str, cap_usd_cents: int, anthropic_key: str, auto_tune_mode: str = "suggest"
 ) -> str:
-    await _ensure_schema()
+    _ensure_schema()
 
     fernet = Fernet(settings.fernet_key.encode())
     encrypted_anthropic = fernet.encrypt(anthropic_key.encode()).decode()

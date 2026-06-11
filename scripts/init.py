@@ -16,7 +16,6 @@ in any blanks.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import secrets
 import sys
@@ -73,14 +72,13 @@ def _patch_env_value(lines: list[str], key: str, generator) -> tuple[list[str], 
     return out, changed
 
 
-async def _create_schema() -> None:
-    """Run Base.metadata.create_all against the configured DB."""
+def _create_schema() -> None:
+    """Run alembic upgrade head against the configured DB."""
     # Import lazily — settings won't load until .env has FERNET_KEY/SECRET_KEY
-    from tourniquet.db import engine
-    from tourniquet.models import Base
+    from tourniquet.config import settings
+    from tourniquet.migrate import upgrade_to_head
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    upgrade_to_head(settings.database_url)
 
 
 def main() -> None:
@@ -113,7 +111,7 @@ def main() -> None:
     print()
     print("  Creating local database schema...")
     try:
-        asyncio.run(_create_schema())
+        _create_schema()
         print("  ✓ Schema ready")
     except Exception as exc:
         print(f"  ✗ Schema creation failed: {exc}", file=sys.stderr)

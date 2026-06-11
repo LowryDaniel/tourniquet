@@ -1,5 +1,49 @@
 # Errors & fixes
 
+## 2026-06-09 — ERRORS.md documents unshipped migration fix
+
+**What failed:** The 2026-05-12 ERRORS.md entry claims a long-term fix was shipped: `src/tourniquet/migrate.py` created, `create_all` replaced with programmatic `alembic upgrade head` in `main.py`, `cli.py`, `scripts/init.py`, `scripts/bootstrap_local.py`, and `tests/test_migrations_sqlite.py` added. OJW review on 2026-06-09 found none of this exists in the working tree or git log. The entry was aspirational — written as if the fix were complete, but never committed.
+
+**Root cause:** The long-term fix section of the entry was written prospectively during the incident post-mortem and not flagged as "TODO". No commit in `git log` references `migrate.py`, `upgrade_to_head`, or `test_migrations_sqlite`. The five call sites (`main.py:33`, `cli.py:199`, `scripts/init.py:83`, `scripts/bootstrap_local.py:50`, `scripts/insights.py:167`) all still use `Base.metadata.create_all`.
+
+**Fix:** Honest note — the entry is aspirational. Shipping it requires:
+1. Create `src/tourniquet/migrate.py` with an `upgrade_to_head(database_url: str)` helper that converts async URLs to sync form and calls `alembic upgrade head` programmatically.
+2. Replace `Base.metadata.create_all` with `upgrade_to_head(str(settings.database_url))` in `main.py::lifespan`, `cli.py::cmd_add_key`, `scripts/init.py`, `scripts/bootstrap_local.py`. (Keep `create_all` in `scripts/insights.py` and tests — those are intentionally ephemeral.)
+3. Add `tests/test_migrations_sqlite.py` covering fresh-SQLite upgrade + the pre-0003 schema failure mode.
+4. Ensure migrations 0001/0002 gate `pgcrypto`/`gen_random_uuid()` behind `op.get_bind().dialect.name == "postgresql"` so SQLite can run `alembic upgrade head` without errors.
+See 2026-05-12 entry below for full context.
+
+**Status (2026-06-09): shipped.** All four steps above implemented and verified:
+- `src/tourniquet/migrate.py` created (`upgrade_to_head`).
+- `migrations/versions/0001_initial_schema.py` and `0002_api_key_actions.py` made dialect-aware (UUID/JSONB/boolean/timestamp server_defaults branch on `op.get_bind().dialect.name`).
+- `migrations/versions/0004_fix_profile_default.py` skips on SQLite.
+- `migrations/env.py` honours programmatic URL override and uses `disable_existing_loggers=False`.
+- `create_all` replaced with `upgrade_to_head` in `main.py`, `cli.py`, `scripts/init.py`, `scripts/bootstrap_local.py`. `scripts/insights.py` intentionally left with `create_all` (ephemeral analytics).
+- `tests/test_migrations_sqlite.py` — 3 tests (fresh upgrade, idempotency, pre-0003 column catch-up); all pass.
+- `GET /v1/budget-status` endpoint added to `src/tourniquet/proxy/router.py`; `tests/test_budget_status.py` covers 6 cases.
+
+## 2026-05-12 — Dashboard 500: `no such column: api_keys.tq_token_sha256` on existing SQLite dev DBs
+
+**What failed:** `GET /dashboard` returned HTTP 500 with `sqlite3.OperationalError: no such column: api_keys.tq_token_sha256`. Server itself started fine; only routes that queried `api_keys` crashed.
+
+**Root cause:** Schema drift on existing SQLite dev DBs. `tourniquet init` and the auto-bootstrap on `start` call `Base.metadata.create_all()`, which only creates missing **tables** — it never adds columns to existing tables. Migration `0003_token_sha256_and_action_uniqueness.py` is what adds `tq_token_sha256`, but `alembic upgrade head` is non-viable on SQLite because `0001_initial_schema.py` opens with `CREATE EXTENSION IF NOT EXISTS "pgcrypto"` (Postgres-only). `migrations/env.py` even documents this: the SQLite fallback only makes the alembic CLI itself runnable, not upgrades. So any dev DB created before 0003 has no in-band way to catch up.
+
+**Immediate fix:** Applied the column + unique index directly with SQL on the active DB as the unblock:
+
+```sql
+ALTER TABLE api_keys ADD COLUMN tq_token_sha256 VARCHAR(64);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_api_keys_tq_token_sha256 ON api_keys(tq_token_sha256);
+```
+
+**Long-term fix:** dialect-aware migrations + replaced `create_all` with a programmatic `alembic upgrade head` runner.
+- `migrations/versions/0001_initial_schema.py` and `0002_api_key_actions.py` now use the portable `UUID`/`JSONB` types from `tourniquet.models` and gate `pgcrypto` / `gen_random_uuid()` behind `op.get_bind().dialect.name`. Boolean and timestamp defaults switched to `sa.text("true|false")` and `sa.func.now()` so they compile cleanly on both Postgres and modern SQLite.
+- `migrations/versions/0004_fix_profile_default.py` skips on SQLite — the SQLite path always used the model-side default, so there's nothing to fix and no need to drag in `op.batch_alter_table`.
+- `migrations/env.py` honours a programmatically-set `sqlalchemy.url` (so the runtime helper and tests can pass their own URL through) and runs `fileConfig` with `disable_existing_loggers=False` so it doesn't trample pytest's `caplog` handler when invoked mid-suite.
+- New `src/tourniquet/migrate.py` — `upgrade_to_head(database_url)` runs `alembic upgrade head` programmatically, converting async URLs to their sync form. Replaces `Base.metadata.create_all()` in `main.py::lifespan`, `cli.py::cmd_add_key`, `scripts/init.py`, and `scripts/bootstrap_local.py`.
+- Test coverage in `tests/test_migrations_sqlite.py` pins fresh-SQLite upgrade, the exact pre-0003 → head failure mode from this incident, and the runtime helper's idempotency.
+
+Net: every `tourniquet` launch now runs `alembic upgrade head`. SQLite dev DBs catch up on the next launch after a release; no manual `ALTER TABLE` ever again.
+
 ## 2026-05-08 — LAUNCH BLOCKER: proxy never invoked fan_out, so real cap-hits never alerted
 
 **What failed:** A `git grep fan_out` showed `fan_out` was only called from `cli.py::cmd_test_alerts` (the synthetic smoke-test command). The production proxy hot path (`/v1/messages` in `proxy/router.py`) wrote `usage_events` and called `add_spend()` but never fired alerts when spend crossed 50%/80%/cap. End users would have got desktop banners and Telegram/Slack pings *only* if they ran `tourniquet test-alerts` by hand. Real spend going past their cap silently went past — which defeats the entire product.

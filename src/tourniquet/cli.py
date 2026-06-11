@@ -176,8 +176,8 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
 
     from tourniquet.billing.formatting import format_money, from_major_units
     from tourniquet.config import settings
-    from tourniquet.db import engine, get_session
-    from tourniquet.models import ApiKey, Base, User
+    from tourniquet.db import get_session
+    from tourniquet.models import ApiKey, User
 
     anthropic_key = input("Anthropic key (sk-ant-...): ").strip()
     if not anthropic_key.startswith("sk-ant-"):
@@ -195,8 +195,9 @@ def cmd_add_key(_args: argparse.Namespace) -> None:
     encrypted_key = fernet.encrypt(anthropic_key.encode()).decode()
 
     async def _run() -> None:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        from tourniquet.migrate import upgrade_to_head
+
+        upgrade_to_head(settings.database_url)
         async with get_session() as session:
             result = await session.execute(select(User).where(User.email == email))
             user = result.scalar_one_or_none()

@@ -199,6 +199,46 @@ def _cap_hit_payload(
     }
 
 
+@router.get("/v1/budget-status")
+async def budget_status(request: Request) -> JSONResponse:
+    """Return a read-only budget snapshot for today.
+
+    Auth: same Bearer tq_* token used by /v1/messages.
+
+    Response JSON:
+      spent_usd_cents    — today's accumulated spend
+      cap_usd_cents      — effective daily cap (includes any active lift)
+      remaining_usd_cents
+      percent_used       — 0.0–100.0 (can exceed 100 if over cap)
+      throttle_advised   — true when percent_used > 85
+    """
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header:
+        raise HTTPException(
+            status_code=401,
+            detail={"type": "invalid_token", "message": "Missing Authorization header."},
+        )
+
+    today = date.today()
+    now = datetime.now(UTC)
+
+    async with get_session() as session:
+        api_key = await _resolve_api_key(auth_header, session)
+        spent = await get_today_spend(api_key.id, today, session)
+
+    cap = _effective_cap(api_key, now)
+    remaining = max(0, cap - spent)
+    pct = (spent / cap * 100.0) if cap > 0 else 0.0
+
+    return JSONResponse({
+        "spent_usd_cents": spent,
+        "cap_usd_cents": cap,
+        "remaining_usd_cents": remaining,
+        "percent_used": round(pct, 2),
+        "throttle_advised": pct > 85.0,
+    })
+
+
 @router.post("/v1/messages", response_model=None)
 async def proxy_messages(request: Request) -> StreamingResponse | JSONResponse | Response:
     auth_header = request.headers.get("authorization", "")

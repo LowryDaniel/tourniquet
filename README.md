@@ -76,6 +76,10 @@ See [docs/install.md](docs/install.md) for virtual-env setup, `pipx`, and Window
 2. Paste your `sk-ant-…` key and set a daily cap
 3. Point your agent at `http://127.0.0.1:8787` with your `tq_…` proxy token
 
+The schema is created (or upgraded — see below) automatically; there's no separate migration step. Returning users get the same upgrade-on-launch behaviour, so a `tourniquet` from an older install just works.
+
+> **Upgrading from an existing install?** Tourniquet runs `alembic upgrade head` on every launch. Migrations are dialect-aware (Postgres + SQLite) and idempotent — a DB already at head is a no-op, a stale dev DB gets caught up. See [docs/install.md](docs/install.md#upgrading-an-existing-install) for the manual command.
+
 **Drop-in for Claude Code:**
 
 ```bash

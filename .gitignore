@@ -30,6 +30,10 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
+# Logs
+logs/
+*.log
+
 # Alembic
 # (versions are committed — only exclude generated artifacts)
 

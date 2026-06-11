@@ -32,6 +32,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # SQLite does not support ALTER COLUMN SET DEFAULT. The SQLite path always
+    # used the Python-side model default ("standard") so there is nothing to
+    # fix here. Skip on SQLite — only apply on Postgres where the 0001 DDL
+    # set server_default='hobby' and caused the mismatch.
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+
     op.alter_column(
         "api_keys",
         "profile",
@@ -42,6 +50,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+
     op.alter_column(
         "api_keys",
         "profile",

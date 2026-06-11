@@ -4,10 +4,8 @@ Adds the table that backs the per-key Action history view in the dashboard
 and the proxy's "did we already fire this threshold today?" idempotency
 check.
 
-For SQLite local dev, `Base.metadata.create_all()` in `cli.py::cmd_start`
-already auto-creates this table on first launch — this migration only
-matters for Postgres production deployments where `alembic upgrade head`
-is the schema source of truth.
+Dialect-aware: uses native UUID + JSONB on Postgres, CHAR(36) + JSON on
+SQLite so `alembic upgrade head` runs cleanly on both backends.
 
 Revision ID: 0002
 Revises: 0001
@@ -18,7 +16,6 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 revision = "0002"
 down_revision = "0001"
@@ -27,24 +24,46 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "api_key_actions",
-        sa.Column(
+    bind = op.get_bind()
+    dialect = bind.dialect.name
+
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
+        from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
+        id_col = sa.Column(
             "id",
-            postgresql.UUID(as_uuid=True),
+            PG_UUID(as_uuid=True),
             primary_key=True,
             server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
+        )
+        api_key_id_col = sa.Column(
             "api_key_id",
-            postgresql.UUID(as_uuid=True),
+            PG_UUID(as_uuid=True),
             sa.ForeignKey("api_keys.id", ondelete="CASCADE"),
             nullable=False,
-        ),
+        )
+        details_col = sa.Column("details", PG_JSONB, nullable=True)
+        ts_now = sa.text("now()")
+    else:
+        id_col = sa.Column("id", sa.CHAR(36), primary_key=True)
+        api_key_id_col = sa.Column(
+            "api_key_id",
+            sa.CHAR(36),
+            sa.ForeignKey("api_keys.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+        details_col = sa.Column("details", sa.JSON, nullable=True)
+        ts_now = sa.func.now()
+
+    op.create_table(
+        "api_key_actions",
+        id_col,
+        api_key_id_col,
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=ts_now,
             nullable=False,
         ),
         # action: kill_now | lift_by_amount | lift_mode | cap_set |
@@ -53,8 +72,7 @@ def upgrade() -> None:
         # source: slack_socket | telegram_poll | web | cli | proxy | auto
         sa.Column("source", sa.String(40), nullable=False),
         sa.Column("summary", sa.Text, nullable=False),
-        # JSONB on Postgres, JSON on SQLite (handled by JSONB alias in models.py)
-        sa.Column("details", postgresql.JSONB, nullable=True),
+        details_col,
     )
     # Composite-friendly indexes — the dashboard always filters by api_key_id
     # and orders by created_at desc.
