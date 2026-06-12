@@ -83,10 +83,10 @@ Content-Type: application/json
 
 ### GET /health
 
-Returns 200 OK if the service is up. No auth required.
+Returns 200 OK if the service is up. No auth required. `commit` is the git SHA baked into the image at build time (`unknown` if the image was built without the `GIT_SHA` build-arg).
 
 ```json
-{"status": "ok", "version": "0.1.0"}
+{"status": "ok", "version": "0.1.0", "commit": "<full git SHA>"}
 ```
 
 ---

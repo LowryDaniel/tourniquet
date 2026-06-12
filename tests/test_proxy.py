@@ -11,6 +11,7 @@ Three critical scenarios:
 import contextlib
 import hashlib
 import json
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -28,7 +29,16 @@ from tourniquet.providers.anthropic import stream_request
 async def test_health(client):  # type: ignore[no-untyped-def]
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["commit"] == os.environ.get("GIT_SHA", "unknown")
+
+
+@pytest.mark.asyncio
+async def test_health_reports_baked_git_sha(client, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GIT_SHA", "deadbeefcafe")
+    response = client.get("/health")
+    assert response.json()["commit"] == "deadbeefcafe"
 
 
 @pytest.mark.asyncio

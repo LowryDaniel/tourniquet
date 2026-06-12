@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -67,7 +68,13 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "version": "0.1.0"}
+        # GIT_SHA is baked in at image build time (see Dockerfile ARG); it lets
+        # the /ship gate prove WHICH commit is live, not just that the app is up.
+        return {
+            "status": "ok",
+            "version": "0.1.0",
+            "commit": os.getenv("GIT_SHA", "unknown"),
+        }
 
     return app
 

@@ -1,19 +1,21 @@
-# Handoff — 2026-06-11
+# Handoff — 2026-06-12
 
 ## Task
-Warden backfill sweep (workspace-root session): bring burnrate's month of stranded work under version control and give the project its missing kit (CLAUDE.md, this file).
+Added the /ship skill (`.claude/skills/ship/SKILL.md`) and made deploys verifiable: `/health` now reports the git commit SHA baked in at image build time (Dockerfile `ARG GIT_SHA` → env; CI and manual deploy commands pass `--build-arg`).
 
 ## Current state
-- Committed today: the SQLite migration fix (`src/tourniquet/migrate.py`, `tests/test_migrations_sqlite.py`), budget-status endpoint test, migration-version edits, and OJW review doc — all of which ERRORS.md had claimed "shipped" on 2026-06-09 while sitting uncommitted since the 2026-05-11 commit.
-- NOT verified: whether the committed code is actually deployed to tourniquet.dev. Local commit ≠ deployed.
+- **Deploy state VERIFIED (closes 2026-06-11 next action #1): the Fly app has never been deployed.** `tourniquet.dev` is a static landing page (`/health` → 404); `tourniquet-web.fly.dev` unreachable; `ENABLE_FLY_DEPLOY=false`; no `FLY_API_TOKEN` repo secret; no local `flyctl`. "Live at tourniquet.dev" currently means the landing page, not the app.
+- Test suite run fresh this session: `234 passed, 3 skipped` (closes 2026-06-11 next action #2).
+- /ship gate therefore ends at commit+push until a deploy path is enabled (noted, dated, inside the skill itself).
+- Repo renamed on GitHub: canonical is `LowryDaniel/tourniquet`; local remote URL still says `burnrate` (redirects fine).
 
 ## Next actions
-1. Verify deploy state: compare the running tourniquet.dev version against this commit; deploy if behind. (Sonnet)
-2. Run the test suite (`pytest`) — the stranded tests were committed without a fresh run this session. (Haiku)
+1. Dan decides: enable the Fly deploy path (set `FLY_API_TOKEN` secret + flip `ENABLE_FLY_DEPLOY=true`, or install flyctl locally) — or formally keep the app local-first and leave /ship Steps 4–5 dormant. (Decision, then Sonnet)
+2. Create `Dockerfile.worker` (chip already spawned) — blocks the worker deploy whenever deploys go live. (Sonnet)
 
 ## Key files
-- `src/tourniquet/migrate.py` — the migration runner that ERRORS.md claimed shipped.
-- `ERRORS.md` — 2026-06-09 entry documents the aspirational-shipped pattern this commit closes.
+- `.claude/skills/ship/SKILL.md` — the shipping gate; contains the dated deploy-state note.
+- `src/tourniquet/main.py`, `Dockerfile`, `.github/workflows/ci.yml` — GIT_SHA injection chain.
 
 ## Open questions / blockers
-- Deploy pipeline location/credentials — check README or ask Dan if not documented.
+- Whether the hosted Fly app is wanted at all for v0.1, or deferred to the v0.2 roadmap.

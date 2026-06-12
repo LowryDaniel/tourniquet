@@ -15,6 +15,8 @@ Purpose: a fix is **shipped** when it is **committed AND live on tourniquet.dev*
 - `FLY_API_TOKEN` set in the environment — load from `.env` or the Fly.io dashboard (Settings → Tokens); **never hardcode it here**
 - The GitHub Actions CI deploy path (`vars.ENABLE_FLY_DEPLOY=true` + `secrets.FLY_API_TOKEN` set in repo Settings) is the automated path; this skill covers the **manual** fallback when CI is not configured or a manual push is needed
 
+**Deploy state as of 2026-06-12 (verified live):** the Fly app has never been deployed. `tourniquet.dev` is a static landing page (its `/health` returns 404); `tourniquet-web.fly.dev` is unreachable; `ENABLE_FLY_DEPLOY=false` and no `FLY_API_TOKEN` secret exists on the repo; `flyctl` is not installed on the Mac. Until Dan enables a deploy path, this gate ends at Step 4: "shipped" means **committed AND pushed to `main`**, and Steps 4–5 are dormant. Re-verify this note (curl the two URLs, `gh variable list`) before trusting it — delete it once the first real deploy lands.
+
 ---
 
 ## Gate sequence — run in order, none skippable
@@ -104,7 +106,7 @@ git push origin main
 
 Then watch the GitHub Actions `deploy` job at: https://github.com/LowryDaniel/tourniquet/actions
 
-CI will run `flyctl deploy --app tourniquet-web --config fly.toml --remote-only` then `flyctl deploy --app tourniquet-worker --config fly.worker.toml --remote-only`.
+CI will run `flyctl deploy --app tourniquet-web --config fly.toml --remote-only --build-arg GIT_SHA=${{ github.sha }}` then `flyctl deploy --app tourniquet-worker --config fly.worker.toml --remote-only`. The `GIT_SHA` build-arg is what makes Step 5's commit check work — it is baked into the image and reported by `/health`. The worker deploy deliberately omits it: the worker serves no `/health` endpoint, so there is nothing to report. If the worker ever gains one, add the same build-arg to its deploy commands.
 
 **Option B — manual flyctl deploy** (fallback when CI deploy is not configured):
 
@@ -112,7 +114,7 @@ CI will run `flyctl deploy --app tourniquet-web --config fly.toml --remote-only`
 # Mac zsh — from /Users/danlowry/Desktop/AI/burnrate
 # FLY_API_TOKEN must be set — load from .env or fly dashboard, never hardcode
 export FLY_API_TOKEN=<load from .env or flyctl auth token>
-flyctl deploy --app tourniquet-web --config fly.toml --remote-only
+flyctl deploy --app tourniquet-web --config fly.toml --remote-only --build-arg GIT_SHA=$(git rev-parse HEAD)
 flyctl deploy --app tourniquet-worker --config fly.worker.toml --remote-only
 ```
 
@@ -125,20 +127,19 @@ flyctl deploy --app tourniquet-worker --config fly.worker.toml --remote-only
 The word "shipped" may only be used after this step passes.
 
 ```zsh
-# Mac zsh
+# Mac zsh — from /Users/danlowry/Desktop/AI/burnrate
 curl -s https://tourniquet.dev/health | python3 -m json.tool
+git rev-parse HEAD
 ```
 
-Expected response shape (from `src/tourniquet/main.py:68-70`):
+Expected response shape (from `src/tourniquet/main.py`):
 ```json
-{"status": "ok", "version": "0.1.0"}
+{"status": "ok", "version": "0.1.0", "commit": "<full git SHA>"}
 ```
 
-Compare the `version` field against `src/tourniquet/__init__.py:__version__`. If the versions match and `status` is `"ok"`, the deploy is confirmed live.
+**Hard gate:** the `commit` field must exactly equal the local `git rev-parse HEAD` output. That equality proves the running code IS the commit you just made — not a stale build at the same version number. If `/health` is unreachable, errors, or the SHAs differ, do NOT write "shipped" anywhere; investigate the deploy.
 
-**Hard gate:** if the `/health` response is unreachable, returns an error, or shows a stale version, do NOT write "shipped" anywhere. Investigate — the deploy may have failed silently or the machine may not have restarted.
-
-Note: version `"0.1.0"` is currently hardcoded in both `main.py` and `__init__.py`. When the project bumps its version number, this check will catch stale deploys automatically. Because the version string alone cannot distinguish two different commits at the same version, also verify one observable behaviour changed by the fix — for example: a specific endpoint response reflecting the new logic, a log line emitted by the new code, or a migration-applied indicator in the database. Confirming `status: ok` at the same version proves the app is running; verifying the changed behaviour proves the correct commit is live.
+If `commit` is `"unknown"`, the image was built without the `GIT_SHA` build-arg — redeploy using the exact Step 4 commands (both the CI path and the manual path pass it).
 
 ---
 
@@ -148,7 +149,7 @@ Only after Step 5 passes: write the ERRORS.md or HANDOFF.md entry. The entry mus
 
 - The pytest summary line from Step 1
 - The git commit SHA (from `git log --oneline -1`)
-- The `/health` response confirming the live version
+- The `/health` response confirming the live `commit` SHA matches
 - The word "shipped" may now be used
 
 ERRORS.md entry format:
@@ -158,7 +159,7 @@ ERRORS.md entry format:
 
 **What failed:** <description>
 **Root cause:** <root cause>
-**Fix:** <what was done> — committed `<SHA>`, deployed to tourniquet.dev (`/health` → `{"status":"ok","version":"0.1.0"}`). Tests: <pytest summary line>.
+**Fix:** <what was done> — committed `<SHA>`, deployed to tourniquet.dev (`/health` `commit` matches `<SHA>`). Tests: <pytest summary line>.
 ```
 
 ---

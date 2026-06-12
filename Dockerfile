@@ -1,5 +1,10 @@
 FROM python:3.12-slim
 
+# Injected by the deploy command (--build-arg GIT_SHA=$(git rev-parse HEAD));
+# surfaced by /health so deploys are verifiable against the local commit.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 WORKDIR /app
 
 # System deps for psycopg binary
