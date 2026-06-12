@@ -52,22 +52,30 @@ def upgrade() -> None:
 
         def _id_col(name: str = "id") -> sa.Column:  # type: ignore[type-arg]
             return sa.Column(
-                name, PG_UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+                name,
+                PG_UUID(as_uuid=True),
+                primary_key=True,
+                server_default=sa.text("gen_random_uuid()"),
             )
 
         def _fk_col(name: str, fk: str) -> sa.Column:  # type: ignore[type-arg]
-            return sa.Column(name, PG_UUID(as_uuid=True), sa.ForeignKey(fk, ondelete="CASCADE"), nullable=False)
+            return sa.Column(
+                name, PG_UUID(as_uuid=True), sa.ForeignKey(fk, ondelete="CASCADE"), nullable=False
+            )
 
         json_type = PG_JSONB
         bool_true = sa.text("true")
         bool_false = sa.text("false")
         ts_now = sa.text("now()")
     else:
+
         def _id_col(name: str = "id") -> sa.Column:  # type: ignore[type-arg]
             return sa.Column(name, sa.CHAR(36), primary_key=True)
 
         def _fk_col(name: str, fk: str) -> sa.Column:  # type: ignore[type-arg]
-            return sa.Column(name, sa.CHAR(36), sa.ForeignKey(fk, ondelete="CASCADE"), nullable=False)
+            return sa.Column(
+                name, sa.CHAR(36), sa.ForeignKey(fk, ondelete="CASCADE"), nullable=False
+            )
 
         json_type = sa.JSON
         bool_true = sa.text("1")

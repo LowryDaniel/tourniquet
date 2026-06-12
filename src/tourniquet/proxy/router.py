@@ -230,13 +230,15 @@ async def budget_status(request: Request) -> JSONResponse:
     remaining = max(0, cap - spent)
     pct = (spent / cap * 100.0) if cap > 0 else 0.0
 
-    return JSONResponse({
-        "spent_usd_cents": spent,
-        "cap_usd_cents": cap,
-        "remaining_usd_cents": remaining,
-        "percent_used": round(pct, 2),
-        "throttle_advised": pct > 85.0,
-    })
+    return JSONResponse(
+        {
+            "spent_usd_cents": spent,
+            "cap_usd_cents": cap,
+            "remaining_usd_cents": remaining,
+            "percent_used": round(pct, 2),
+            "throttle_advised": pct > 85.0,
+        }
+    )
 
 
 @router.post("/v1/messages", response_model=None)

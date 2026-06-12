@@ -52,7 +52,7 @@ dev = [
     "pytest-cov>=5",
     "pytest-httpx>=0.30",
     "respx>=0.21",
-    "ruff>=0.5",
+    "ruff>=0.15,<0.16",  # pinned to a minor: unpinned ruff broke CI when 0.15 added rules (2026-06-12)
     "mypy>=1.10",
     "types-passlib",
 ]

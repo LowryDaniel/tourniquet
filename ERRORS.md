@@ -1,5 +1,13 @@
 # Errors & fixes
 
+## 2026-06-12 — CI lint red on main: unpinned ruff version drift flagged never-linted backfill files
+
+**What failed:** First push since the 2026-06-11 backfill turned CI red — `ruff check` reported 14 errors, all in files untouched by the push (`tests/test_migrations_sqlite.py`, `tests/test_budget_status.py`, `migrations/versions/0001_initial_schema.py`). The previous run on main had passed.
+
+**Root cause:** Two compounding gaps: (1) `ruff>=0.5` was unpinned in pyproject dev deps, so CI silently picked up ruff 0.15's new/stricter rules between runs; (2) the 2026-06-11 backfill commits were pushed without a CI run, so those files had never been linted at all. The failure surfaced on the next unrelated push.
+
+**Fix:** Pinned `ruff>=0.15,<0.16` in pyproject.toml; applied `ruff check --fix` plus manual line-wraps and removed a `UTC = UTC` self-assignment the auto-fixer left behind; `ruff format` reconciled `0001_initial_schema.py` and `proxy/router.py`. Verified locally: `ruff check` + `ruff format --check` clean, `pytest` 234 passed / 3 skipped. Committed with the /health GIT_SHA work (see HANDOFF.md).
+
 ## 2026-06-11 — Stale index.lock blocked all commits since Jun 9; stranded work finally committed
 
 **What failed:** Every `git commit` failed with `Unable to create .git/index.lock: File exists`. The lock dated Jun 9 20:18 — a crashed commit attempt — meaning the migration fix the entry below describes could not have been committed even when a session tried.

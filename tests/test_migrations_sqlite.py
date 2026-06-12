@@ -15,8 +15,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-import pytest
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 
 
 def _tmp_sqlite_url() -> tuple[str, str]:
@@ -43,7 +42,15 @@ def _column_names(url: str, table: str) -> list[str]:
 
 
 _EXPECTED_TABLES = sorted(
-    ["users", "api_keys", "usage_events", "triggers", "caps_today", "api_key_actions", "alembic_version"]
+    [
+        "users",
+        "api_keys",
+        "usage_events",
+        "triggers",
+        "caps_today",
+        "api_key_actions",
+        "alembic_version",
+    ]
 )
 
 
@@ -81,11 +88,11 @@ class TestMigrationsSQLite:
         api_keys table but lacked the tq_token_sha256 column added in 0003.
         upgrade_to_head must detect the partial migration and apply 0003+0004.
         """
+
         from alembic import command
         from alembic.config import Config
-        from pathlib import Path
 
-        from tourniquet.migrate import upgrade_to_head, _ALEMBIC_INI
+        from tourniquet.migrate import _ALEMBIC_INI, upgrade_to_head
 
         url, path = _tmp_sqlite_url()
         try:
